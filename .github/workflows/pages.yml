@@ -1,0 +1,49 @@
+name: Publicar Precifica Web
+
+# A cada alteracao em web/ ou precifica/ o site e' gerado e publicado no GitHub Pages sozinho.
+on:
+  push:
+    branches: [main, root]
+    paths:
+      - "web/**"
+      - "precifica/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Gerar o site (web/build_web.py)
+        run: python web/build_web.py
+        env:
+          # Configure em: Settings > Secrets and variables > Actions > Variables
+          PRECIFICA_DROPBOX_KEY: ${{ vars.DROPBOX_APP_KEY }}
+          PRECIFICA_DROPBOX_FOLDER: ${{ vars.DROPBOX_FOLDER }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/pwa
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
