@@ -9,6 +9,35 @@ const mcTag = P.mcTag = (v) => (v < 0 ? "neg" : v < 0.2 ? "warn" : null);
 const PRIMARY = "#FF9900", NAVY = "#1B2A3D", STEEL = "#52617F", GREEN = "#15803D", RED = "#C62828";
 P.colors = { PRIMARY, NAVY, STEEL, GREEN, RED };
 
+/** Reajuste de precos em lote (%): P.bulkAdjust({ title, table, field, label, rows, groups }) */
+P.bulkAdjust = async function ({ title, table, field, label, rows, groups }) {
+  groups = groups || [{ name: "Todos", test: () => true }];
+  const opts = groups.map((g) => `${g.name} (${rows.filter(g.test).length})`);
+  const v = await P.ask(title, [
+    { key: "pct", label: "Reajuste (%)", kind: "num", required: true, help: "Use um valor positivo para aumentar (ex.: 5) ou negativo para reduzir (ex.: -3)." },
+    { key: "grupo", label: "Aplicar em", kind: "choice", options: opts }], { pct: 5, grupo: opts[0] }, { ok: "Continuar", sub: `Altera o campo “${label}”.` });
+  if (!v) return false;
+  const g = groups[Math.max(0, opts.indexOf(v.grupo))];
+  const alvo = rows.filter(g.test);
+  if (!alvo.length) { P.ui.toast("Nenhum item nesse grupo", "warn"); return false; }
+  if (!v.pct) { P.ui.toast("Informe um percentual diferente de zero", "warn"); return false; }
+  const f = 1 + v.pct / 100, ex = alvo[0];
+  const ok = await P.confirm("Confirmar reajuste", `${alvo.length} item(ns) terão o campo “${label}” alterado em ${P.num(v.pct, 2)}%.\nExemplo: ${ex.nome || ex.descricao}: ${P.money(ex[field])} → ${P.money(ex[field] * f)}.\n\nA alteração fica registrada como edição recente (e sincroniza com a equipe).`, "Reajustar");
+  if (!ok) return false;
+  for (const r of alvo) P.app.db.save(table, { id: r.id, [field]: P.round2(fnum(r[field]) * f) });
+  P.app.changed(`${alvo.length} preço(s) reajustado(s)`);
+  return true;
+};
+/** Lembrete de backup: so quando nao ha sincronizacao e ja existem dados. */
+P.backupDue = function (eng) {
+  try {
+    if (P.sync && P.sync.connected) return false;
+    if (!(eng.servicos.length || eng.revendas.length || P.app.db.all("propostas").length)) return false;
+    const last = +localStorage.getItem("precifica.lastBackup") || 0, snooze = +localStorage.getItem("precifica.backupSnooze") || 0;
+    return Date.now() - last > 14 * 864e5 && Date.now() > snooze;
+  } catch (e) { return false; }
+};
+
 // ====================================================================== PAINEL
 P.definePage("Painel", {
   subtitle: "Visão geral do mês: quanto você vai faturar, quanto sobra e se os preços cobrem os custos.",
@@ -44,14 +73,17 @@ P.definePage("Painel", {
       table([{ key: "tipo_txt", label: "Tipo", hm: true }, { key: "nome", label: "Serviço / produto", pri: true }, { key: "preco", label: "Preço atual", align: "r", fmt: M },
         { key: "sug", label: "Preço sugerido", align: "r", fmt: M }, { key: "mc_pct", label: "Margem contrib.", align: "r", fmt: PC }, { key: "situacao", label: "Situação" }], rows,
       { onOpen: (r) => P.app.openAnalysis(r.tipo, r.id), empty: "Cadastre seus serviços em “Serviços e fichas”." }));
-    return [k, callout(rel.analise, rel.nivel), h("div", { class: "cols32" }, chart, stepsCard), tbl];
+    const lembrete = P.backupDue(e) ? h("div", { class: "callout warn remind" }, h("p", { text: "Faz tempo que você não faz um backup (ou nunca fez). Seus dados ficam só neste aparelho." }),
+      h("div", { class: "bar" }, btn("Fazer backup agora", () => P.pages["Configurações"].backup(P.app.pageCtx("Configurações")).then(() => P.app.draw(pg)), "primary sm"),
+        btn("Lembrar em 7 dias", () => { try { localStorage.setItem("precifica.backupSnooze", String(Date.now() + 7 * 864e5)); } catch (e2) { /* ok */ } P.app.draw(pg); }, "ghost sm"))) : null;
+    return [lembrete, k, callout(rel.analise, rel.nivel), h("div", { class: "cols32" }, chart, stepsCard), tbl];
   },
 });
 
 // ====================================================================== SERVICOS + FICHA TECNICA
 P.definePage("Serviços e fichas", {
   subtitle: "Cadastre cada serviço e monte a ficha técnica: horas de mão de obra + insumos. O app calcula o custo direto e o preço sugerido na hora.",
-  actions: () => [btn("+ Novo serviço", () => P.pages["Serviços e fichas"].novo())],
+  actions: () => [btn("Reajustar preços", () => P.bulkAdjust({ title: "Reajustar preços de venda dos serviços", table: "servicos", field: "preco", label: "Preço atual", rows: P.app.engine.servicos }), "secondary"), btn("+ Novo serviço", () => P.pages["Serviços e fichas"].novo())],
   state: { cur: null, detail: false, q: "" },
   render(pg) {
     const e = pg.eng, st = this.state;
@@ -191,7 +223,7 @@ P.rowForm = async function (title, fields, values, o) {
 // ====================================================================== INSUMOS
 P.definePage("Insumos e preços", {
   subtitle: `Materiais, deslocamento, terceiros e preços de mercado usados nas fichas técnicas. Já vem com ${SEED.PRECOS_REFERENCIA.length} preços de referência de serviços elétricos levantados pela EG3 (Curitiba, set/2026).`,
-  actions: () => [btn("+ Novo insumo", () => P.pages["Insumos e preços"].novo())],
+  actions: () => [btn("Reajustar preços", () => P.pages["Insumos e preços"].reajustar(), "secondary"), btn("+ Novo insumo", () => P.pages["Insumos e preços"].novo())],
   FIELDS: [
     { key: "descricao", label: "Descrição", required: true, span: 2 }, { key: "unidade", label: "Unidade de medida", kind: "combo", options: SEED.UNIDADES },
     { key: "categoria", label: "Categoria", kind: "combo", options: ["Material", "Mão de obra terceirizada", "Deslocamento", "Referência de mercado", "Outros"] },
@@ -205,8 +237,15 @@ P.definePage("Insumos e preços", {
       columns: [{ key: "descricao", label: "Descrição", pri: true }, { key: "unidade", label: "Unidade", hm: true }, { key: "qtde_bruta", label: "Qtd bruta", align: "r", fmt: N2, hm: true },
         { key: "qtde_liquida", label: "Qtd líquida", align: "r", fmt: N2, hm: true }, { key: "custo", label: "Custo pago", align: "r", fmt: M },
         { key: "fator", label: "Fator perda", align: "r", fmt: (v) => num(v, 3), hm: true }, { key: "custo_medida", label: "Custo por medida", align: "r", fmt: M4 },
-        { key: "categoria", label: "Categoria", hm: true }],
+        { key: "categoria", label: "Categoria", hm: true },
+        { key: "_u", label: "Preço atualizado", hm: true, fmt: (u) => (u ? (Date.now() - u < 864e5 ? "hoje" : `há ${Math.floor((Date.now() - u) / 864e5)} dias`) : "referência EG3") }],
       edit: (r) => this.editar(pg, r) });
+  },
+  reajustar() {
+    const rows = [...P.app.engine.insumos.values()];
+    const cats = [...new Set(rows.map((r) => r.categoria || "Sem categoria"))].sort();
+    return P.bulkAdjust({ title: "Reajustar preços dos insumos", table: "insumos", field: "custo", label: "Custo pago", rows,
+      groups: [{ name: "Todos os insumos", test: () => true }, { name: "Só os que eu cadastrei ou alterei", test: (r) => r._u > 0 }, ...cats.map((c) => ({ name: "Categoria: " + c, test: (r) => (r.categoria || "Sem categoria") === c }))] });
   },
   fix(v) { v.qtde_bruta = v.qtde_bruta || 1; v.qtde_liquida = v.qtde_liquida || v.qtde_bruta; return v; },
   async novo(values) {
@@ -324,7 +363,7 @@ P.definePage("Capacidade produtiva", {
 // ====================================================================== REVENDA
 P.definePage("Revenda", {
   subtitle: "Materiais que você compra e revende ao cliente (ex.: disjuntores, tomadas, luminárias).",
-  actions: () => [btn("+ Novo produto", () => P.pages["Revenda"].novo())],
+  actions: () => [btn("Reajustar preços", () => P.bulkAdjust({ title: "Reajustar preços de venda da revenda", table: "revenda", field: "preco", label: "Preço de venda", rows: P.app.engine.revendas }), "secondary"), btn("+ Novo produto", () => P.pages["Revenda"].novo())],
   FIELDS: [
     { key: "nome", label: "Produto", required: true, span: 2 }, { key: "unidade", label: "Unidade de medida", kind: "combo", options: SEED.UNIDADES },
     { key: "qtde", label: "Quantidade comprada", kind: "num", min: 0, help: "Ex.: caixa com 10 unidades" }, { key: "custo", label: "Valor pago na compra (R$)", kind: "money", min: 0, help: "Valor total pela quantidade" },

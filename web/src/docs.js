@@ -295,13 +295,13 @@ P.docs.proposal = function (cfg, prop, itens) {
 /** Fecho da proposta: frase de despedida, linha de aprovacao e as duas assinaturas (com imagem, se houver). */
 P.docs.closing = function (cfg, prop, ctx, ac, onlySig = false) {
   const sub = (t) => P.sub(t, ctx);
-  if (onlySig) return `<div class="pfim">${P.docs.sigRow(prop.assinatura1_img, sub(prop.assinatura1 || (ac ? `${ac} (Resp.)` : "")), prop.assinatura2_img, sub(prop.assinatura2 || cfg.proposta_assinante_empresa || ""))}</div>`;
+  if (onlySig) return `<div class="pfim">${P.docs.sigRow(prop.assinatura1_img, sub(prop.assinatura1 || (ac ? `${ac} (Resp.)` : "")), prop.assinatura2_img, sub(prop.assinatura2 || cfg.proposta_assinante_empresa || ""), prop.assinatura1_esc, prop.assinatura2_esc)}</div>`;
   const fecho = P.paras(sub(prop.fecho));
   const a1 = sub(prop.assinatura1 || (ac ? `${ac} (Resp.)` : ""));
   const a2 = sub(prop.assinatura2 || cfg.proposta_assinante_empresa || "");
   return `<div class="pfim">` + fecho.map((p, i) => `<p class="pf" style="${i === 0 ? "margin-top:30pt" : ""}">${P.rich(p)}</p>`).join("") +
     `<p class="pap" style="${fecho.length ? "" : "margin-top:30pt"}">Aprovo as condições acima descritas em __________/__________/__________e assinamos:</p>` +
-    P.docs.sigRow(prop.assinatura1_img, a1, prop.assinatura2_img, a2) + `</div>`;
+    P.docs.sigRow(prop.assinatura1_img, a1, prop.assinatura2_img, a2, prop.assinatura1_esc, prop.assinatura2_esc) + `</div>`;
 };
 // ------------------------------------------------------------------ visualizacao / impressao
 let docModal = null, docStyle = null;

@@ -359,9 +359,10 @@ P.definePage("Configurações", {
       P.app.changed("Logotipo atualizado");
     } catch (e) { P.info("Não foi possível usar a imagem", String(e.message || e), "danger"); }
   },
-  backup(pg) {
+  async backup(pg) {
     pg.db._flush();
     download(`precifica_backup_${P.todayISO().replace(/-/g, "")}.json`, pg.db.exportData());
+    try { localStorage.setItem("precifica.lastBackup", String(Date.now())); } catch (e) { /* ok */ }
     P.ui.toast("Backup salvo");
   },
   async restaurar(pg) {

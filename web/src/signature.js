@@ -24,18 +24,21 @@ function keyOutWhite(c, thr) {
 }
 
 /** HTML de uma assinatura (linha + nome, com a imagem acima da linha). Usado na proposta e nas previas. */
-P.docs.sigPiece = (img, name) => `<div><div class="sigarea">${img ? `<img src="${img}" alt="">` : ""}</div><i></i><span>${P.esc((name || "").trim())}</span></div>`;
-P.docs.sigRow = (i1, n1, i2, n2) => `<div class="psig">${P.docs.sigPiece(i1, n1)}${P.docs.sigPiece(i2, n2)}</div>`;
+P.docs.sigPiece = (img, name, scale = 100) => {
+  const s = Math.min(200, Math.max(30, Number(scale) || 100)) / 100;
+  return `<div><div class="sigarea">${img ? `<img src="${img}" alt="" style="max-height:${(64 * s).toFixed(1)}pt;max-width:${Math.min(100 * s, 100).toFixed(0)}%${s > 1 ? `;height:${(64 * s).toFixed(1)}pt` : ""}">` : ""}</div><i></i><span>${P.esc((name || "").trim())}</span></div>`;
+};
+P.docs.sigRow = (i1, n1, i2, n2, s1 = 100, s2 = 100) => `<div class="psig">${P.docs.sigPiece(i1, n1, s1)}${P.docs.sigPiece(i2, n2, s2)}</div>`;
 
 /** Abre o recortador. src = data URL ou URL. Retorna Promise<string|null> (data URL final) */
-P.cropImage = async function (src, { name = "", title = "Recortar assinatura", canRemoveBg = true } = {}) {
+P.cropImage = async function (src, { name = "", title = "Recortar assinatura", canRemoveBg = true, scale = 100 } = {}) {
   let img;
   try { img = await P.loadImage(src); } catch (e) { P.info("Imagem", e.message, "danger"); return null; }
   // area de trabalho (no maximo 1600 px para ficar leve no celular)
   const k0 = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
   let work = mk(img.naturalWidth * k0, img.naturalHeight * k0);
   work.getContext("2d").drawImage(img, 0, 0, work.width, work.height);
-  const st = { crop: { x: 0, y: 0, w: work.width, h: work.height }, remove: true, thr: 205 };
+  const st = { crop: { x: 0, y: 0, w: work.width, h: work.height }, remove: canRemoveBg, thr: 205, scale };
   const view = mk(work.width, work.height);
   view.className = "cr-canvas";
   const box = h("div", { class: "cr-box" });
@@ -56,18 +59,20 @@ P.cropImage = async function (src, { name = "", title = "Recortar assinatura", c
     if (st.remove) keyOutWhite(out, st.thr);
     return out;
   };
-  let raf = 0;
+  let tick = 0;
   const refresh = () => {
     const { x, y, w, h: hh } = st.crop, W = work.width, H = work.height;
     const pos = { left: (x / W) * 100 + "%", top: (y / H) * 100 + "%", width: (w / W) * 100 + "%", height: (hh / H) * 100 + "%" };
     Object.assign(box.style, pos); Object.assign(hole.style, pos);
-    cancelAnimationFrame(raf);
-    raf = requestAnimationFrame(() => {
+    const id = ++tick, go = () => {                       // agrupa varias mudancas seguidas (quadro de animacao ou, se a aba estiver oculta, 60 ms)
+      if (id !== tick) return;
+      tick++;
       const out = result();
       outCanvas.width = out.width; outCanvas.height = out.height;
       outCanvas.getContext("2d").drawImage(out, 0, 0);
-      piece.innerHTML = P.docs.sigPiece(out.toDataURL("image/png"), name || "Nome do assinante");
-    });
+      piece.innerHTML = P.docs.sigPiece(out.toDataURL("image/png"), name || "Nome do assinante", st.scale);
+    };
+    requestAnimationFrame(go); setTimeout(go, 60);
   };
   // ---- arrastar / redimensionar (mouse e toque)
   let drag = null;
@@ -109,54 +114,64 @@ P.cropImage = async function (src, { name = "", title = "Recortar assinatura", c
   const thrWrap = h("label", { class: "fld" }, h("span", { class: "fl", text: "Força para apagar o fundo" }), thr, h("span", { class: "fh", text: "Se sobrar mancha do papel, aumente. Se a letra ficar fraca, diminua." }));
   chk.addEventListener("change", () => { st.remove = chk.checked; thrWrap.style.display = st.remove ? "" : "none"; refresh(); });
   thr.addEventListener("input", () => { st.thr = +thr.value; refresh(); });
+  const sc = h("input", { type: "range", min: 40, max: 160, step: 5, value: st.scale, class: "range" });
+  const scLbl = h("span", { class: "fl", text: `Tamanho na proposta: ${st.scale}%` });
+  sc.addEventListener("input", () => { st.scale = +sc.value; scLbl.textContent = `Tamanho na proposta: ${st.scale}%`; refresh(); });
+  const sizeRow = h("label", { class: "fld" }, scLbl, sc, h("span", { class: "fh", text: "Aumenta ou diminui a assinatura na proposta (100% é o tamanho padrão)." }));
   const removeRow = canRemoveBg ? [h("label", { class: "chk" }, chk, h("span", { text: "Apagar o fundo branco (deixar só a tinta)" })), thrWrap] : [];
   const body = h("div", { class: "cr" },
     h("p", { class: "fh", text: "Arraste o retângulo laranja ou as bolinhas das bordas para escolher a parte da imagem." }),
     h("div", { class: "cr-wrap" }, stage),
     h("div", { class: "bar" }, btn("⟳ Girar", rotate, "secondary sm"), btn("Usar a imagem toda", reset, "secondary sm")),
-    ...removeRow,
+    ...removeRow, sizeRow,
     h("div", { class: "cr-prevs" },
       h("div", null, h("div", { class: "fl", text: "Resultado" }), h("div", { class: "cr-chk" }, outCanvas)),
       h("div", null, h("div", { class: "fl", text: "Como fica na proposta" }), piece)));
   redraw(); refresh();
   let m;
   m = P.modal({ title, body, cls: "full cropmo", dismiss: false,
-    footer: [btn("Cancelar", () => m.close(null), "secondary"), h("span", { class: "grow" }), btn("Usar assinatura", () => { const out = result(); m.close(st.remove ? out.toDataURL("image/png") : out.toDataURL("image/jpeg", 0.9)); })] });
+    footer: [btn("Cancelar", () => m.close(null), "secondary"), h("span", { class: "grow" }), btn("Usar assinatura", () => { const out = result(); m.close({ url: st.remove ? out.toDataURL("image/png") : out.toDataURL("image/jpeg", 0.9), scale: st.scale }); })] });
   return m.promise.then((r) => r || null);
 };
 
-/** Campo "imagem da assinatura": miniatura + escolher / recortar / remover. */
+/** Campo "imagem da assinatura": miniatura + escolher / recortar / remover + tamanho. */
 P.sigField = function ({ label, getName, onChange }) {
-  const S = { value: "" };
+  const S = { value: "", scale: 100 };
   const thumb = h("div", { class: "sig-thumb" });
   const bEscolher = btn("Escolher imagem", () => choose(), "secondary sm");
   const bEditar = btn("Recortar", () => edit(), "secondary sm");
   const bRemover = btn("Remover", () => { S.value = ""; draw(); onChange && onChange(); }, "danger-ghost sm");
+  const rng = h("input", { type: "range", min: 40, max: 160, step: 5, value: 100, class: "range" });
+  const rLbl = h("span", { class: "fl", text: "Tamanho: 100%" });
+  const rWrap = h("label", { class: "fld" }, rLbl, rng);
+  rng.addEventListener("input", () => { S.scale = +rng.value; rLbl.textContent = `Tamanho: ${S.scale}%`; onChange && onChange(); });
   const draw = () => {
-    thumb.replaceChildren(S.value ? h("img", { src: S.value, alt: "Assinatura" }) : h("span", { text: "Sem imagem" }));
+    thumb.replaceChildren(S.value ? h("img", { src: S.value, alt: "Assinatura", style: { transform: `scale(${Math.min(1, S.scale / 100)})` } }) : h("span", { text: "Sem imagem" }));
     bEscolher.textContent = S.value ? "Trocar imagem" : "Escolher imagem";
-    bEditar.style.display = bRemover.style.display = S.value ? "" : "none";
+    bEditar.style.display = bRemover.style.display = rWrap.style.display = S.value ? "" : "none";
+    rng.value = S.scale; rLbl.textContent = `Tamanho: ${S.scale}%`;
   };
+  const apply = (out) => { S.value = out.url; S.scale = out.scale; draw(); onChange && onChange(); };
   async function choose() {
     const f = await P.pickImageFile();
     if (!f) return;
     try {
       const url = await P.fileToDataURL(f);
-      const out = await P.cropImage(url, { name: getName ? getName() : "" });
-      if (out) { S.value = out; draw(); onChange && onChange(); }
+      const out = await P.cropImage(url, { name: getName ? getName() : "", scale: S.scale });
+      if (out) apply(out);
     } catch (e) { P.info("Imagem", e.message, "danger"); }
   }
   async function edit() {
-    const out = await P.cropImage(S.value, { name: getName ? getName() : "", canRemoveBg: false, title: "Recortar assinatura" });
-    if (out) { S.value = out; draw(); onChange && onChange(); }
+    const out = await P.cropImage(S.value, { name: getName ? getName() : "", canRemoveBg: false, scale: S.scale });
+    if (out) apply(out);
   }
-  S.el = h("div", { class: "sigfield" }, h("span", { class: "fl", text: label }), thumb, h("div", { class: "bar" }, bEscolher, bEditar, bRemover));
+  S.el = h("div", { class: "sigfield" }, h("span", { class: "fl", text: label }), thumb, h("div", { class: "bar" }, bEscolher, bEditar, bRemover), rWrap);
   S.get = () => S.value;
-  S.set = (v) => { S.value = v || ""; draw(); };
+  S.getScale = () => S.scale;
+  S.set = (v, scale) => { S.value = v || ""; S.scale = scale || 100; draw(); };
   draw();
   return S;
 };
-
 /** Mostra um HTML de proposta (bloco de fechamento) reduzido para caber na largura disponivel. */
 P.fitPaper = function (el) {
   const fit = () => {

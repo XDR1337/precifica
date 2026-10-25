@@ -5,6 +5,14 @@ const { fnum, money, num, pct, numInput, safeDiv, M, N0 } = P;
 const SEED = P.SEED;
 const { PRIMARY, NAVY, GREEN } = P.colors;
 
+/** Dias ate a proposta vencer (negativo = vencida). null se nao houver data. */
+P.diasParaVencer = (p, hoje) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(p.data || "");
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]); d.setDate(d.getDate() + Math.floor(fnum(p.validade_dias, 30)));
+  const h0 = new Date(hoje); h0.setHours(0, 0, 0, 0);
+  return Math.round((d - h0) / 864e5);
+};
 const resumo = (t, n = 95) => { t = String(t || "").split(/\s+/).filter(Boolean).join(" "); return t.length <= n ? t : t.slice(0, n - 1) + "…"; };
 const AJUDA_TEXTO = "Dica: use {empresa}, {validade_dias}, {numero}, {total} e {cliente} para o programa preencher sozinho  ·  **texto** fica em negrito  ·  uma linha em branco separa os parágrafos";
 const ESCOPO_FIELDS = [
@@ -180,7 +188,7 @@ class ProposalEditor {
   updateSigPreview() {
     if (!this.sigPrev) return;
     const cfg = this.app.engine.cfg;
-    const prop = { fecho: this.t_fecho.value, assinatura1: this.e_ass1.value.trim(), assinatura2: this.e_ass2.value.trim(), assinatura1_img: this.sig1.get(), assinatura2_img: this.sig2.get() };
+    const prop = { fecho: this.t_fecho.value, assinatura1: this.e_ass1.value.trim(), assinatura2: this.e_ass2.value.trim(), assinatura1_img: this.sig1.get(), assinatura2_img: this.sig2.get(), assinatura1_esc: this.sig1.getScale(), assinatura2_esc: this.sig2.getScale() };
     const ctx = P.proposalContext(cfg, { numero: this.e_num.value, validade_dias: this.e_val.value, cliente_nome: this.cli.nome.value, titulo: this.e_titulo.value, data: P.parseDateBR(this.e_data.value) || P.todayISO() }, this.l_itens ? this.l_itens.items : []);
     this.sigPrev.innerHTML = P.docs.closing(cfg, prop, ctx, this.e_ac.value.trim(), true);
     if (!this._fitPrev) this._fitPrev = P.fitPaper(this.sigPrev); else this._fitPrev();
@@ -213,8 +221,8 @@ class ProposalEditor {
     this.t_fecho.value = p.fecho || mod.fecho || "";
     this.e_ass1.value = p.assinatura1 || "";
     this.e_ass2.value = p.assinatura2 || (!p.id ? cfg.proposta_assinante_empresa || "" : "");
-    this.sig1.set(p.assinatura1_img || "");
-    this.sig2.set(p.assinatura2_img || (!p.id ? cfg.assinatura_empresa_img || "" : ""));
+    this.sig1.set(p.assinatura1_img || "", fnum(p.assinatura1_esc, 100));
+    this.sig2.set(p.assinatura2_img || (!p.id ? cfg.assinatura_empresa_img || "" : ""), p.assinatura2_img ? fnum(p.assinatura2_esc, 100) : fnum(cfg.assinatura_empresa_esc, 100));
     this.chk_sigdef.checked = !!(cfg.assinatura_empresa_img && !p.id);
     this.l_itens.set(this.itens);
     this.parcInfo();
@@ -324,7 +332,7 @@ class ProposalEditor {
       aos_cuidados: this.e_ac.value.trim(), objeto: this.t_objeto.value.trim(), escopo_intro: this.t_intro.value.trim(), escopo_json: dump(this.l_escopo.get()), escopo_nota: this.t_nota.value.trim(),
       secoes_pre_json: dump(this.l_pre.get()), secoes_pos_json: dump(this.l_pos.get()), parcelas_json: dump(this.l_parc.get()), desconto_valor: fnum(this.e_desc.value),
       invest_nova_pagina: this.chk_pag.checked ? 1 : 0, detalhes_pagamento: this.t_det.value.trim(), fecho: this.t_fecho.value.trim(), assinatura1: this.e_ass1.value.trim(),
-      assinatura2: this.e_ass2.value.trim(), assinatura1_img: this.sig1.get(), assinatura2_img: this.sig2.get(), observacoes: "", forma_pagamento: "" };
+      assinatura2: this.e_ass2.value.trim(), assinatura1_img: this.sig1.get(), assinatura2_img: this.sig2.get(), assinatura1_esc: this.sig1.getScale(), assinatura2_esc: this.sig2.getScale(), observacoes: "", forma_pagamento: "" };
     for (const k of ProposalEditor.CLI_KEYS) p[`cliente_${k}`] = this.cli[k].value.trim();
     return p;
   }
@@ -342,7 +350,7 @@ class ProposalEditor {
       if (p.cliente_id && this.db.get("clientes", p.cliente_id)) cli.id = p.cliente_id;
       p.cliente_id = this.db.save("clientes", cli);
     }
-    if (this.chk_sigdef.checked) this.db.setCfg("assinatura_empresa_img", this.sig2.get());
+    if (this.chk_sigdef.checked) this.db.setMany({ assinatura_empresa_img: this.sig2.get(), assinatura_empresa_esc: this.sig2.getScale() });
     const itens = this.l_itens.get().map((it) => ({ descricao: it.descricao, quantidade: it.quantidade, unidade: it.unidade, valor_unit: it.valor_unit, origem: it.origem }));
     const pid = this.db.saveProposal(p, itens);
     const saved = this.db.get("propostas", pid);
@@ -361,29 +369,53 @@ P.definePage("Propostas", {
   render(pg) {
     const cfg = pg.eng.cfg, st = this.state;
     const rows = [], stats = Object.fromEntries(SEED.STATUS_PROPOSTA.map((s) => [s, [0, 0]]));
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    let aVencer = 0, vencidas = 0;
     for (const p of pg.db.all("propostas")) {
       const itens = pg.db.proposalItems(p.id);
       const tot = P.proposalTotals(p, itens, cfg).total;
       const s = p.status || "Rascunho";
       if (s in stats) { stats[s][0]++; stats[s][1] += tot; }
+      const dias = P.diasParaVencer(p, hoje), aberta = s === "Rascunho" || s === "Enviada";
+      if (aberta && dias !== null) { if (dias < 0) vencidas++; else if (dias <= 7) aVencer++; }
       if (st.filtro !== "Todas" && s !== st.filtro) continue;
-      rows.push({ ...p, numero_txt: String(Math.floor(fnum(p.numero))), data_txt: P.fmtDate(p.data), itens: itens.length, total: tot, _tag: { Aprovada: "good", Recusada: "neg", Rascunho: "muted" }[s] || null });
+      const valid = !aberta || dias === null ? "—" : dias < 0 ? `vencida há ${-dias} d` : dias === 0 ? "vence hoje" : `vence em ${dias} d`;
+      rows.push({ ...p, numero_txt: String(Math.floor(fnum(p.numero))), data_txt: P.fmtDate(p.data), itens: itens.length, total: tot, validade_txt: valid,
+        _tag: aberta && dias !== null && dias < 0 ? "warn" : { Aprovada: "good", Recusada: "neg", Rascunho: "muted" }[s] || null });
     }
     const aberto = stats.Rascunho[1] + stats.Enviada[1];
     const dec = stats.Aprovada[0] + stats.Recusada[0];
     const k = kpis([{ title: "Propostas em aberto", value: money(aberto), sub: `${stats.Rascunho[0] + stats.Enviada[0]} proposta(s)`, accent: PRIMARY }, { title: "Aprovadas", value: money(stats.Aprovada[1]), sub: `${stats.Aprovada[0]} proposta(s)`, accent: GREEN },
       { title: "Taxa de aprovação", value: dec ? pct(safeDiv(stats.Aprovada[0], dec)) : "—", sub: "aprovadas ÷ (aprovadas + recusadas)", accent: PRIMARY },
-      { title: "Ticket médio aprovado", value: stats.Aprovada[0] ? money(safeDiv(stats.Aprovada[1], stats.Aprovada[0])) : "—", accent: NAVY }], 4);
+      { title: "Ticket médio aprovado", value: stats.Aprovada[0] ? money(safeDiv(stats.Aprovada[1], stats.Aprovada[0])) : "—", accent: NAVY },
+      { title: "Vencem em 7 dias", value: String(aVencer), sub: vencidas ? `${vencidas} já vencida(s) em aberto` : "propostas em aberto", color: vencidas ? "#B45309" : NAVY, accent: "#B45309" }]);
     const tabs = seg(["Todas", ...SEED.STATUS_PROPOSTA], st.filtro, (v) => { st.filtro = v; pg.rerender(); });
     tabs.classList.add("scroll");
     const tbl = card(table([{ key: "numero_txt", label: "Nº" }, { key: "data_txt", label: "Data", hm: true }, { key: "cliente_nome", label: "Cliente", pri: true }, { key: "itens", label: "Itens", align: "r", fmt: N0, hm: true },
-      { key: "total", label: "Total", align: "r", fmt: M }, { key: "titulo", label: "Título", hm: true }, { key: "status", label: "Situação" }], rows, { onOpen: (r) => this.acoes(r), empty: "Nenhuma proposta. Toque em “+ Nova proposta”." }));
+      { key: "total", label: "Total", align: "r", fmt: M }, { key: "titulo", label: "Título", hm: true }, { key: "status", label: "Situação" }, { key: "validade_txt", label: "Validade" }], rows, { onOpen: (r) => this.acoes(r), empty: "Nenhuma proposta. Toque em “+ Nova proposta”." }));
     return [k, h("div", { class: "bar" }, tabs), tbl];
   },
   acoes(r) {
+    const marcar = SEED.STATUS_PROPOSTA.filter((s) => s !== r.status).map((s) => ({ text: `Marcar como ${s}`, fn: () => { P.app.db.save("propostas", { id: r.id, status: s, atualizado_em: new Date().toISOString().slice(0, 19) }); P.app.changed(`Proposta marcada como ${s}`); } }));
     P.menu(`Proposta ${r.numero_txt} – ${r.cliente_nome}`, [
       { text: "Abrir / editar", fn: () => this.edit(r.id) }, { text: "Gerar PDF", fn: () => this.gerarPdf(P.app.db.get("propostas", r.id)) },
+      { text: "Enviar resumo por WhatsApp", fn: () => this.whatsapp(P.app.db.get("propostas", r.id)) }, ...marcar,
       { text: "Duplicar", fn: () => this.dup(r.id) }, { text: "Excluir", kind: "danger", fn: () => this.excluir(r) }]);
+  },
+  /** Abre o WhatsApp com um resumo da proposta (valor, condicoes e validade). */
+  whatsapp(prop) {
+    const e = P.app.engine, cfg = e.cfg, itens = P.app.db.proposalItems(prop.id);
+    const tot = P.proposalTotals(prop, itens, cfg).total;
+    const parc = P.json(prop.parcelas_json, []).filter((x) => x.rotulo || fnum(x.valor));
+    const dias = P.diasParaVencer(prop, new Date());
+    const venc = dias === null ? "" : (() => { const d = new Date(String(prop.data).slice(0, 10) + "T12:00:00"); d.setDate(d.getDate() + Math.floor(fnum(prop.validade_dias, 30))); return d.toLocaleDateString("pt-BR"); })();
+    const linhas = [`*Proposta nº ${Math.floor(fnum(prop.numero))}*${prop.titulo ? " – " + prop.titulo : ""}`, prop.cliente_nome ? `Cliente: ${prop.cliente_nome}` : "", "",
+      ...itens.map((i) => `• ${String(i.descricao || "").split("\n")[0].slice(0, 80)} – ${money(fnum(i.quantidade, 1) * fnum(i.valor_unit))}`), "", `*Valor total: ${money(tot)}*`,
+      ...(parc.length ? ["", "Condições de pagamento:", ...parc.map((x) => `${x.rotulo ? x.rotulo + ": " : ""}${money(x.valor)}${x.detalhe ? " (" + x.detalhe + ")" : ""}`)] : []),
+      venc ? `\nProposta válida até ${venc}.` : "", "", P.empresaNome(cfg)].filter((l, i, a) => !(l === "" && a[i - 1] === ""));
+    const fone = String(prop.cliente_telefone || "").replace(/\D/g, "");
+    const num = fone.length >= 10 && fone.length <= 11 ? "55" + fone : fone.length > 11 ? fone : "";
+    window.open(`https://wa.me/${num}?text=${encodeURIComponent(linhas.join("\n").trim())}`, "_blank", "noopener");
   },
   newProposal(cliente) { P.app.show("Propostas"); return new ProposalEditor(this, null, [], cliente || null); },
   edit(id) { return new ProposalEditor(this, P.app.db.get("propostas", id), P.app.db.proposalItems(id)); },

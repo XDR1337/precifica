@@ -71,7 +71,7 @@ const COLS = {
     cliente_endereco: "", cliente_complemento: "", cliente_bairro: "", cliente_cidade: "", cliente_uf: "", cliente_cep: "",
     cliente_email: "", cliente_telefone: "", desconto_valor: 0, forma_pagamento: "", detalhes_pagamento: "", observacoes: "",
     criado_em: null, atualizado_em: null, titulo: "", aos_cuidados: "", objeto: "", escopo_intro: "", escopo_json: "", escopo_nota: "",
-    secoes_pre_json: "", secoes_pos_json: "", parcelas_json: "", fecho: "", assinatura1: "", assinatura2: "", assinatura1_img: "", assinatura2_img: "", invest_nova_pagina: 1,
+    secoes_pre_json: "", secoes_pos_json: "", parcelas_json: "", fecho: "", assinatura1: "", assinatura2: "", assinatura1_img: "", assinatura2_img: "", assinatura1_esc: 100, assinatura2_esc: 100, invest_nova_pagina: 1,
   },
   proposta_itens: { proposta_id: 0, ordem: 0, descricao: "", quantidade: 1, unidade: "", valor_unit: 0, origem: "" },
 };
