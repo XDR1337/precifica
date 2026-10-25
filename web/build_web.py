@@ -25,7 +25,7 @@ from precifica.assets import ACRS_LOGO_PNG       # noqa: E402
 from precifica.core import APP_AUTHOR, APP_VERSION  # noqa: E402
 
 SRC = os.path.join(HERE, "src")
-JS_ORDER = ["core.js", "ui-base.js", "docs.js", "pages-a.js", "pages-b.js", "proposal.js", "tutorial.js", "importer.js", "sync.js", "app.js"]
+JS_ORDER = ["core.js", "ui-base.js", "docs.js", "signature.js", "pages-a.js", "pages-b.js", "proposal.js", "tutorial.js", "importer.js", "sync.js", "app.js"]
 APP_NAME = "Precifica"
 
 

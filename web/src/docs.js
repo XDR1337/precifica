@@ -286,18 +286,23 @@ P.docs.proposal = function (cfg, prop, itens) {
   let pos = P.json(prop.secoes_pos_json, []);
   if (!pos.length && (prop.observacoes || "").trim()) pos = [{ titulo: "OBSERVAÇÕES COMERCIAIS IMPORTANTES", texto: prop.observacoes }];
   for (const s of pos) b += secao(s.titulo || "", s.texto || "", { nova: !!s.nova_pagina, espaco: dfnum(s.espaco) });
-  // fecho + assinaturas
-  const fecho = P.paras(sub(prop.fecho));
-  const a1 = sub(prop.assinatura1 || (ac ? `${ac} (Resp.)` : ""));
-  const a2 = sub(prop.assinatura2 || cfg.proposta_assinante_empresa || "");
-  b += `<div class="pfim">` + fecho.map((p, i) => `<p class="pf" style="${i === 0 ? "margin-top:30pt" : ""}">${P.rich(p)}</p>`).join("") +
-    `<p class="pap" style="${fecho.length ? "" : "margin-top:30pt"}">Aprovo as condições acima descritas em __________/__________/__________e assinamos:</p>` +
-    `<div class="psig"><div><i></i><span>${desc(a1.trim())}</span></div><div><i></i><span>${desc(a2.trim())}</span></div></div></div>`;
+  b += P.docs.closing(cfg, prop, ctx, ac);
   const css = `@page{size:A4;margin:9mm 13.7mm 15mm 12.35mm;@bottom-center{content:counter(page);font:10.7pt Calibri,Carlito,Arial,sans-serif;color:#000}}`;
   return { html: `<div class="paper prop"><table class="sheet"><thead><tr><td>${head}</td></tr></thead><tbody><tr><td>${b}</td></tr></tbody></table></div>`, css,
     title: `Proposta ${numero} - ${ctx.cliente || "cliente"}` };
 };
 
+/** Fecho da proposta: frase de despedida, linha de aprovacao e as duas assinaturas (com imagem, se houver). */
+P.docs.closing = function (cfg, prop, ctx, ac, onlySig = false) {
+  const sub = (t) => P.sub(t, ctx);
+  if (onlySig) return `<div class="pfim">${P.docs.sigRow(prop.assinatura1_img, sub(prop.assinatura1 || (ac ? `${ac} (Resp.)` : "")), prop.assinatura2_img, sub(prop.assinatura2 || cfg.proposta_assinante_empresa || ""))}</div>`;
+  const fecho = P.paras(sub(prop.fecho));
+  const a1 = sub(prop.assinatura1 || (ac ? `${ac} (Resp.)` : ""));
+  const a2 = sub(prop.assinatura2 || cfg.proposta_assinante_empresa || "");
+  return `<div class="pfim">` + fecho.map((p, i) => `<p class="pf" style="${i === 0 ? "margin-top:30pt" : ""}">${P.rich(p)}</p>`).join("") +
+    `<p class="pap" style="${fecho.length ? "" : "margin-top:30pt"}">Aprovo as condições acima descritas em __________/__________/__________e assinamos:</p>` +
+    P.docs.sigRow(prop.assinatura1_img, a1, prop.assinatura2_img, a2) + `</div>`;
+};
 // ------------------------------------------------------------------ visualizacao / impressao
 let docModal = null, docStyle = null;
 P.openDoc = function (d) {

@@ -79,7 +79,7 @@ class ProposalEditor {
 
     const tabNames = ["1 Dados e cliente", "2 Objetivo e escopo", "3 Textos", "4 Investimento e pagamento", "5 Fechamento"];
     this.panes = [h("div", { class: "pane" }), h("div", { class: "pane" }), h("div", { class: "pane" }), h("div", { class: "pane" }), h("div", { class: "pane" })];
-    this.tabs = seg(tabNames, tabNames[0], (v) => this.panes.forEach((pn, i) => pn.classList.toggle("on", tabNames[i] === v)));
+    this.tabs = seg(tabNames, tabNames[0], (v) => { this.panes.forEach((pn, i) => pn.classList.toggle("on", tabNames[i] === v)); if (v === tabNames[4]) requestAnimationFrame(() => this.updateSigPreview()); });
     this.tabs.classList.add("scroll");
     this.panes[0].classList.add("on");
     this.tabDados(this.panes[0]);
@@ -165,9 +165,26 @@ class ProposalEditor {
     this.t_fecho = f.el;
     const a1 = this.ent("1ª assinatura – cliente (ex.: Tiago Santos (Resp.))"), a2 = this.ent("2ª assinatura – empresa (ex.: Fulano de Tal (Administrativo))");
     this.e_ass1 = a1.el; this.e_ass2 = a2.el;
-    t.append(card(cardTitle("Fechamento e assinaturas", "Última página: frase de despedida, linha “Aprovo as condições acima descritas em __/__/__ e assinamos:” (fixa) e as duas linhas de assinatura."), f.wrap, h("div", { class: "fg" }, a1.wrap, a2.wrap)));
+    this.sig1 = P.sigField({ label: "Imagem da assinatura do cliente (opcional)", getName: () => this.e_ass1.value, onChange: () => this.updateSigPreview() });
+    this.sig2 = P.sigField({ label: "Imagem da assinatura da empresa (opcional)", getName: () => this.e_ass2.value, onChange: () => this.updateSigPreview() });
+    this.chk_sigdef = h("input", { type: "checkbox" });
+    this.sigPrev = h("div", { class: "paper prop sigprev" });
+    this.sigPrevWrap = h("div", { class: "sigprev-wrap" }, this.sigPrev);
+    for (const el of [this.t_fecho, this.e_ass1, this.e_ass2]) el.addEventListener("input", () => this.updateSigPreview());
+    this._fitPrev = null;
+    t.append(card(cardTitle("Fechamento e assinaturas", "Última página: frase de despedida, linha “Aprovo as condições acima descritas em __/__/__ e assinamos:” (fixa) e as duas linhas de assinatura."), f.wrap,
+        h("div", { class: "fg" }, h("div", { class: "stack" }, a1.wrap, this.sig1.el), h("div", { class: "stack" }, a2.wrap, this.sig2.el,
+          h("label", { class: "chk" }, this.chk_sigdef, h("span", { text: "Usar a assinatura da empresa como padrão nas próximas propostas" }))))),
+      card(cardTitle("Como fica na proposta", "Prévia reduzida só das assinaturas (as linhas de assinatura e os nomes)."), this.sigPrevWrap));
   }
-
+  updateSigPreview() {
+    if (!this.sigPrev) return;
+    const cfg = this.app.engine.cfg;
+    const prop = { fecho: this.t_fecho.value, assinatura1: this.e_ass1.value.trim(), assinatura2: this.e_ass2.value.trim(), assinatura1_img: this.sig1.get(), assinatura2_img: this.sig2.get() };
+    const ctx = P.proposalContext(cfg, { numero: this.e_num.value, validade_dias: this.e_val.value, cliente_nome: this.cli.nome.value, titulo: this.e_titulo.value, data: P.parseDateBR(this.e_data.value) || P.todayISO() }, this.l_itens ? this.l_itens.items : []);
+    this.sigPrev.innerHTML = P.docs.closing(cfg, prop, ctx, this.e_ac.value.trim(), true);
+    if (!this._fitPrev) this._fitPrev = P.fitPaper(this.sigPrev); else this._fitPrev();
+  }
   // ---- valores iniciais
   load(cliente, mod) {
     const p = this.prop, cfg = this.cfg;
@@ -196,8 +213,12 @@ class ProposalEditor {
     this.t_fecho.value = p.fecho || mod.fecho || "";
     this.e_ass1.value = p.assinatura1 || "";
     this.e_ass2.value = p.assinatura2 || (!p.id ? cfg.proposta_assinante_empresa || "" : "");
+    this.sig1.set(p.assinatura1_img || "");
+    this.sig2.set(p.assinatura2_img || (!p.id ? cfg.assinatura_empresa_img || "" : ""));
+    this.chk_sigdef.checked = !!(cfg.assinatura_empresa_img && !p.id);
     this.l_itens.set(this.itens);
     this.parcInfo();
+    this.updateSigPreview();
   }
 
   // ---- modelos de texto
@@ -224,11 +245,12 @@ class ProposalEditor {
   loadExample() {
     const ex = SEED.EXEMPLO_PROPOSTA;
     this.e_num.value = String(ex.numero); this.e_data.value = P.fmtDate(ex.data); this.e_val.value = String(ex.validade_dias); this.e_titulo.value = ex.titulo; this.e_ac.value = ex.aos_cuidados;
-    this.e_ass1.value = ex.assinatura1; this.e_ass2.value = ex.assinatura2; this.cli.nome.value = ex.cliente_nome;
+    this.e_ass1.value = ex.assinatura1; this.e_ass2.value = ex.assinatura2; this.cli.nome.value = ex.cliente_nome; this.sig1.set(""); this.sig2.set("");
     this.t_objeto.value = ex.objeto; this.t_intro.value = ex.escopo_intro; this.t_nota.value = ex.escopo_nota; this.t_fecho.value = ex.fecho; this.t_det.value = "";
     this.l_escopo.set(ex.escopo); this.l_pre.set(ex.secoes_pre); this.l_pos.set(ex.secoes_pos); this.l_parc.set(ex.parcelas);
     this.l_itens.set(ex.itens.map(([d, v]) => ({ descricao: d, quantidade: 1, unidade: "", valor_unit: v, origem: "livre" })));
     this.e_desc.value = "0"; this.chk_pag.checked = true;
+    this.updateSigPreview();
     P.ui.toast("Exemplo carregado – edite o que quiser", "ok", 3000);
   }
 
@@ -302,7 +324,7 @@ class ProposalEditor {
       aos_cuidados: this.e_ac.value.trim(), objeto: this.t_objeto.value.trim(), escopo_intro: this.t_intro.value.trim(), escopo_json: dump(this.l_escopo.get()), escopo_nota: this.t_nota.value.trim(),
       secoes_pre_json: dump(this.l_pre.get()), secoes_pos_json: dump(this.l_pos.get()), parcelas_json: dump(this.l_parc.get()), desconto_valor: fnum(this.e_desc.value),
       invest_nova_pagina: this.chk_pag.checked ? 1 : 0, detalhes_pagamento: this.t_det.value.trim(), fecho: this.t_fecho.value.trim(), assinatura1: this.e_ass1.value.trim(),
-      assinatura2: this.e_ass2.value.trim(), observacoes: "", forma_pagamento: "" };
+      assinatura2: this.e_ass2.value.trim(), assinatura1_img: this.sig1.get(), assinatura2_img: this.sig2.get(), observacoes: "", forma_pagamento: "" };
     for (const k of ProposalEditor.CLI_KEYS) p[`cliente_${k}`] = this.cli[k].value.trim();
     return p;
   }
@@ -320,6 +342,7 @@ class ProposalEditor {
       if (p.cliente_id && this.db.get("clientes", p.cliente_id)) cli.id = p.cliente_id;
       p.cliente_id = this.db.save("clientes", cli);
     }
+    if (this.chk_sigdef.checked) this.db.setCfg("assinatura_empresa_img", this.sig2.get());
     const itens = this.l_itens.get().map((it) => ({ descricao: it.descricao, quantidade: it.quantidade, unidade: it.unidade, valor_unit: it.valor_unit, origem: it.origem }));
     const pid = this.db.saveProposal(p, itens);
     const saved = this.db.get("propostas", pid);

@@ -24,6 +24,13 @@ JOBS = {
         escopo_intro: ex.escopo_intro, escopo_json: JSON.stringify(ex.escopo), escopo_nota: ex.escopo_nota, secoes_pre_json: JSON.stringify(ex.secoes_pre), secoes_pos_json: JSON.stringify(ex.secoes_pos),
         parcelas_json: JSON.stringify(ex.parcelas), fecho: ex.fecho, assinatura1: ex.assinatura1, assinatura2: ex.assinatura2, desconto_valor: 0, invest_nova_pagina: 1 };
       P.openDoc(P.docs.proposal(P.app.engine.cfg, prop, ex.itens.map(([d, v]) => ({ descricao: d, quantidade: 1, unidade: '', valor_unit: v }))));""",
+    "assinatura": """
+      const mkSig = (color, w) => { const c = document.createElement("canvas"); c.width = 600; c.height = 200; const g = c.getContext("2d"); g.strokeStyle = color; g.lineWidth = w; g.lineCap = "round";
+        g.beginPath(); g.moveTo(40, 130); g.bezierCurveTo(90, 20, 160, 20, 160, 110); g.bezierCurveTo(160, 190, 260, 40, 330, 100); g.bezierCurveTo(380, 150, 440, 160, 520, 60); g.stroke(); return c.toDataURL("image/png"); };
+      const ex = P.SEED.EXEMPLO_PROPOSTA;
+      const prop = { numero: 9, data: "2026-10-30", validade_dias: 15, titulo: "Teste de assinatura", aos_cuidados: "Cliente", cliente_nome: "Cliente", objeto: "Texto curto do objetivo.", fecho: ex.fecho,
+        assinatura1: "Cliente (Resp.)", assinatura2: "Reinaldo (Administrativo)", assinatura1_img: mkSig("#111", 7), assinatura2_img: mkSig("#1a3a9c", 7), desconto_valor: 0, invest_nova_pagina: 0 };
+      P.openDoc(P.docs.proposal(P.app.engine.cfg, prop, [{ descricao: "Servico", quantidade: 1, unidade: "", valor_unit: 100 }]));""",
     "relatorio": "P.openDoc(P.docs.report(P.app.engine));",
     "analise": "const it = P.app.engine.itens()[0]; P.openDoc(P.docs.analysis(P.app.engine, P.app.engine.analise(it.tipo, it.id, 10, 18)));",
 }
