@@ -20,7 +20,7 @@ const dropbox = {
   key() { return (P.sync.s.dropboxKey || P.SYNC_DROPBOX_KEY || "").trim(); },
   /** Pasta compartilhada no Dropbox (ex.: "Precifica-Equipe"). Vazia = raiz da pasta do app (app tipo "App folder"). */
   folder() { return (P.sync.s.dropboxFolder !== undefined ? P.sync.s.dropboxFolder : (P.SYNC_DROPBOX_FOLDER || "")).trim().replace(/^\/+|\/+$/g, ""); },
-  filePath() { return (this.folder() ? "/" + this.folder() : "") + "/" + FILE_NAME; },
+  filePath() { return (this.folder() ? (this.basePath || "/" + this.folder()) : "") + "/" + FILE_NAME; },
   redirectUri() { return location.origin + location.pathname; },
   configured() { return !!this.key(); },
   async begin() {                                      // vai para a pagina de login do Dropbox (volta com ?code=...)
@@ -29,7 +29,7 @@ const dropbox = {
     const verifier = b64url(rnd), state = b64url(crypto.getRandomValues(new Uint8Array(16)));
     const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
     try { localStorage.setItem(PKCE_KEY, JSON.stringify({ verifier, state, redirect: this.redirectUri() })); } catch (e) { throw new Error("Não foi possível iniciar o login (armazenamento bloqueado)."); }
-    const q = new URLSearchParams({ client_id: this.key(), scope: "files.content.read files.content.write" + (this.folder() ? " files.metadata.read" : ""), response_type: "code", code_challenge: challenge, code_challenge_method: "S256", token_access_type: "offline", redirect_uri: this.redirectUri(), state,
+    const q = new URLSearchParams({ client_id: this.key(), scope: "files.content.read files.content.write" + (this.folder() ? " files.metadata.read sharing.read sharing.write" : ""), response_type: "code", code_challenge: challenge, code_challenge_method: "S256", token_access_type: "offline", redirect_uri: this.redirectUri(), state,
       force_reauthentication: "true", force_reapprove: "true" });   // sempre pede login/conta e a permissao de novo (nao reaproveita a sessao do navegador)
     location.href = "https://www.dropbox.com/oauth2/authorize?" + q;
     await new Promise(() => {});                       // a pagina vai ser trocada
@@ -82,14 +82,44 @@ const dropbox = {
     const hint = res.status === 400 || /invalid_client|client_id|app_key|app key/i.test(sum + text) ? KEY_HINT : "";
     return new Error(`Dropbox ${res.status}: ${(text || "").slice(0, 700)}${hint}`);
   },
-  async checkFolder(token) {
-    if (!this.folder() || this.folderOk === this.folder()) return;
-    const res = await this.call("https://api.dropboxapi.com/2/files/get_metadata", token, null, JSON.stringify({ path: "/" + this.folder() }), "application/json");
-    if (res.status === 409) throw new Error(`A pasta “${this.folder()}” não foi encontrada no seu Dropbox. Aceite o convite da pasta compartilhada (veja o e-mail do Dropbox ou dropbox.com › Compartilhado) e tente de novo.`);
-    if (!res.ok) throw this.friendly(res, await res.text());
-    this.folderOk = this.folder();
+  async rpc(path, token, body) {
+    const res = await this.call("https://api.dropboxapi.com/2/" + path, token, null, JSON.stringify(body || {}), "application/json");
+    const text = await res.text(); let j = null; try { j = JSON.parse(text); } catch (e) { /* ok */ }
+    return { res, j, text };
   },
-  async read(token) {
+  /** Acha a pasta compartilhada pelo nome: ja montada, convite pendente (aceita sozinho) ou montada com outro nome/lugar. */
+  async checkFolder(token) {
+    const name = this.folder();
+    if (!name) { this.basePath = ""; return; }
+    if (this.folderOk === name && this.basePath) return;
+    let path = null, scopeMissing = false;
+    const miss = (r) => /missing_scope/.test(r.text);
+    const meta = await this.rpc("files/get_metadata", token, { path: "/" + name });
+    if (meta.res.ok) path = meta.j.path_display || "/" + name;
+    else if (miss(meta)) throw this.friendly(meta.res, meta.text);
+    const same = (n) => String(n || "").toLowerCase() === name.toLowerCase();
+    if (!path) {                                          // convite recebido e ainda nao aceito: aceita aqui
+      const m = await this.rpc("sharing/list_mountable_folders", token, {});
+      if (m.res.ok) {
+        const f = (m.j.entries || []).find((e) => same(e.name));
+        if (f) { const mt = await this.rpc("sharing/mount_folder", token, { shared_folder_id: f.shared_folder_id }); if (mt.res.ok) path = mt.j.path_display || mt.j.path_lower || "/" + f.name; }
+      } else if (miss(m)) scopeMissing = true;
+    }
+    let seen = [];
+    if (!path) {                                          // ja aceita, mas com outro nome ou em outro lugar
+      const l = await this.rpc("sharing/list_folders", token, {});
+      if (l.res.ok) {
+        seen = (l.j.entries || []).map((e) => e.name);
+        const f = (l.j.entries || []).find((e) => same(e.name) && e.path_lower) || (l.j.entries || []).find((e) => String(e.name).toLowerCase().startsWith(name.toLowerCase()) && e.path_lower);
+        if (f) path = f.path_lower;
+      } else if (miss(l)) scopeMissing = true;
+    }
+    if (!path) {
+      if (scopeMissing) throw new Error("O app precisa de uma permissão nova do Dropbox. Toque em Desconectar, depois em Conectar ao Dropbox e toque em Permitir. Se continuar, avise o administrador (permissões sharing.read e sharing.write).");
+      throw new Error(`A pasta “${name}” não foi encontrada no seu Dropbox. Confirme com o administrador que o convite foi enviado ao e-mail desta conta Dropbox e aceite-o em dropbox.com › Compartilhado.${seen.length ? " Pastas compartilhadas que encontrei: " + seen.slice(0, 8).join(", ") + "." : ""}`);
+    }
+    this.basePath = path.replace(/\/+$/, ""); this.folderOk = name;
+  },  async read(token) {
     await this.checkFolder(token);
     const res = await this.call("https://content.dropboxapi.com/2/files/download", token, { path: this.filePath() });
     this.rev = null;
@@ -205,7 +235,7 @@ P.sync = {
   disconnect() {
     const t = this.cachedToken(), p = this.provider;
     if (t) p.revoke(t);
-    this.clearToken();
+    this.clearToken(); dropbox.folderOk = null; dropbox.basePath = null;
     this.s = { dropboxKey: this.s.dropboxKey, dropboxFolder: this.s.dropboxFolder, clientId: this.s.clientId };
     this.save();
     this.set("idle");
