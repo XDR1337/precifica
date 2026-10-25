@@ -10,6 +10,7 @@ const PKCE_KEY = "precifica.dbx.pkce";
 const FILE_NAME = "precifica-dados.json";
 const load = () => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}"); } catch (e) { return {}; } };
 const store = (s) => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch (e) { /* ok */ } };
+const KEY_HINT = " A chave do app Dropbox pode estar errada: avise o administrador.";
 const authError = () => { const e = new Error("auth"); e.auth = true; return e; };
 const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 
@@ -35,7 +36,7 @@ const dropbox = {
   async tokenCall(params) {
     const res = await fetch("https://api.dropboxapi.com/oauth2/token", { method: "POST", body: new URLSearchParams({ client_id: this.key(), ...params }) });
     const j = await res.json().catch(() => ({}));
-    if (!res.ok) { if (j.error === "invalid_grant") throw authError(); throw new Error(j.error_description || j.error || "Dropbox " + res.status); }
+    if (!res.ok) { if (j.error === "invalid_grant") throw authError(); throw new Error((j.error_description || j.error || "Dropbox " + res.status) + KEY_HINT); }
     return j;
   },
   /** Chamado ao abrir o app: se voltamos do login do Dropbox, troca o codigo pelo token de longa duracao. */
@@ -48,7 +49,7 @@ const dropbox = {
     const err = q.get("error_description") || q.get("error"), code = q.get("code"), state = q.get("state");
     clean();
     if (err) throw new Error(q.get("error") === "access_denied" ? "Você não autorizou o acesso ao Dropbox." : err);
-    if (!pk || pk.state !== state) throw new Error("O login do Dropbox não pôde ser confirmado. Tente conectar de novo.");
+    if (!pk || pk.state !== state) throw new Error("O login do Dropbox não pôde ser confirmado. Tente conectar de novo." + KEY_HINT);
     const j = await this.tokenCall({ grant_type: "authorization_code", code, code_verifier: pk.verifier, redirect_uri: pk.redirect });
     P.sync.s.refresh = j.refresh_token; P.sync.s.connected = true; P.sync.s.provider = "dropbox";
     P.sync.setToken(j.access_token, j.expires_in);
@@ -77,7 +78,8 @@ const dropbox = {
     let j = null; try { j = JSON.parse(text); } catch (e) { /* ok */ }
     const sum = (j && j.error_summary) || "";
     if (/missing_scope/.test(sum + text)) return new Error("O app do Dropbox está sem alguma permissão (Permissions). Marque files.content.read, files.content.write" + (this.folder() ? " e files.metadata.read" : "") + ", clique em Submit, remova o app em dropbox.com/account/connected_apps e conecte de novo.");
-    return new Error(`Dropbox ${res.status}: ${(text || "").slice(0, 700)}`);
+    const hint = res.status === 400 || /invalid_client|client_id|app_key|app key/i.test(sum + text) ? KEY_HINT : "";
+    return new Error(`Dropbox ${res.status}: ${(text || "").slice(0, 700)}${hint}`);
   },
   async checkFolder(token) {
     if (!this.folder() || this.folderOk === this.folder()) return;
@@ -183,7 +185,7 @@ P.sync = {
 
   async connect() {
     const p = this.provider;
-    if (!p.configured()) throw new Error("Informe a chave do app Dropbox antes de conectar.");
+    if (!p.configured()) throw new Error("O app não tem a chave do Dropbox configurada. Avise o administrador.");
     if (p.id === "dropbox") return p.begin();          // sai da pagina; ao voltar, handleRedirect() conclui
     await p.token(true); this.s.connected = true; this.save();
     await this.run({ interactive: true });

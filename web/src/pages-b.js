@@ -319,7 +319,7 @@ P.definePage("Configurações", {
     const sy = P.sync, dbx = sy.providers.dropbox;
     const keyInp = h("input", { class: "in", type: "text", placeholder: "fornecida pelo administrador", autocomplete: "off", value: sy.s.dropboxKey || P.SYNC_DROPBOX_KEY || "" });
     const folderInp = h("input", { class: "in", type: "text", placeholder: "ex.: Precifica-Equipe", autocomplete: "off", value: dbx.folder() });
-    const saveAdv = () => { sy.s.dropboxKey = keyInp.value.trim(); sy.s.dropboxFolder = folderInp.value.trim(); sy.save(); dbx.folderOk = null; };
+    const saveAdv = () => { if (!P.SYNC_DROPBOX_KEY) sy.s.dropboxKey = keyInp.value.trim(); sy.s.dropboxFolder = folderInp.value.trim(); sy.save(); dbx.folderOk = null; };
     keyInp.addEventListener("change", saveAdv); folderInp.addEventListener("change", saveAdv);
     const stTxt = !sy.connected ? "Não conectado. Os dados ficam só neste aparelho." : `Conectado ao Dropbox. ${sy.label()}${sy.state === "error" ? " – " + sy.msg : ""}`;
     const baked = !!(P.SYNC_DROPBOX_KEY);
@@ -327,11 +327,12 @@ P.definePage("Configurações", {
       h("li", { html: "<b>Aceite o convite</b> da pasta compartilhada. O administrador envia o convite para o seu e-mail; abra o e-mail do Dropbox e clique em <b>Aceitar</b> (ou entre em dropbox.com › <b>Compartilhado</b>). Se não recebeu, peça um novo convite." }),
       h("li", { html: "Toque em <b>Conectar ao Dropbox</b>, entre com a sua conta e toque em <b>Permitir</b>." }),
       h("li", { html: "Pronto! Tudo o que você alterar aparece para as outras pessoas e vice-versa. Funciona offline e sincroniza quando voltar a ter internet." }));
-    const adv = h("details", { class: "guide" }, h("summary", { text: "Avançado" }), h("div", { class: "fg" }, P.field({ label: "Chave do app Dropbox (App key)", help: baked ? "Já veio configurada neste app." : "Fornecida pelo administrador." }, keyInp), P.field({ label: "Pasta compartilhada no Dropbox", help: "Nome da pasta que você aceitou no convite. Deixe como veio." }, folderInp)));
+    const adv = h("details", { class: "guide" }, h("summary", { text: "Avançado" }), h("div", { class: "fg" }, baked ? null : P.field({ label: "Chave do app Dropbox (App key)", help: "Fornecida pelo administrador." }, keyInp), P.field({ label: "Pasta compartilhada no Dropbox", help: "Nome da pasta que você aceitou no convite. Deixe como veio." }, folderInp)));
     const syncCard = card(cardTitle("Sincronização entre aparelhos e pessoas (Dropbox)", "Mantém o celular, o computador e a equipe com os mesmos dados."),
       h("p", { class: "msg", text: stTxt }), sy.connected ? null : steps,
       h("div", { class: "bar" }, sy.connected ? [btn("Sincronizar agora", () => sy.run({ interactive: true }).then(() => pg.rerender()).catch((e) => P.info("Sincronização", e.message, "danger"))), btn("Desconectar", () => { sy.disconnect(); pg.rerender(); }, "secondary")]
         : [btn("Conectar ao Dropbox", () => { saveAdv(); sy.connect().catch((e) => P.info("Não foi possível conectar", e.message, "danger")); })]),
+      h("p", { class: "fh", text: "Se aparecer erro ao conectar, a chave do app Dropbox pode estar errada: avise o administrador." }),
       h("p", { class: "fh", text: "Privacidade: o Dropbox vai informar que o app pode acessar arquivos. O app só lê e grava o arquivo precifica-dados.json na pasta compartilhada." }), adv);    const sobre = card(h("h3", { text: `${P.APP_NAME} ${P.APP_VERSION}` }), h("p", { class: "cs", text: `Desenvolvido pela ${P.APP_AUTHOR} (projeto de extensão PROEX – UniBrasil) como alternativa à Planilha de Precificação EG3 para quem não tem Microsoft Excel. Os cálculos seguem a planilha R02, com as correções apontadas no relatório final do projeto.` }));
     return [empresa, params, enc, tut, syncCard, dados, sobre];
   },
