@@ -29,7 +29,8 @@ const dropbox = {
     const verifier = b64url(rnd), state = b64url(crypto.getRandomValues(new Uint8Array(16)));
     const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
     try { localStorage.setItem(PKCE_KEY, JSON.stringify({ verifier, state, redirect: this.redirectUri() })); } catch (e) { throw new Error("Não foi possível iniciar o login (armazenamento bloqueado)."); }
-    const q = new URLSearchParams({ client_id: this.key(), scope: "files.content.read files.content.write" + (this.folder() ? " files.metadata.read" : ""), response_type: "code", code_challenge: challenge, code_challenge_method: "S256", token_access_type: "offline", redirect_uri: this.redirectUri(), state });
+    const q = new URLSearchParams({ client_id: this.key(), scope: "files.content.read files.content.write" + (this.folder() ? " files.metadata.read" : ""), response_type: "code", code_challenge: challenge, code_challenge_method: "S256", token_access_type: "offline", redirect_uri: this.redirectUri(), state,
+      force_reauthentication: "true", force_reapprove: "true" });   // sempre pede login/conta e a permissao de novo (nao reaproveita a sessao do navegador)
     location.href = "https://www.dropbox.com/oauth2/authorize?" + q;
     await new Promise(() => {});                       // a pagina vai ser trocada
   },
