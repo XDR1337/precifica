@@ -171,18 +171,20 @@ class ProposalEditor {
   tabFecho(t) {
     const f = this.txt("Frase de fechamento", 56);
     this.t_fecho = f.el;
-    const a1 = this.ent("1ª assinatura – cliente (ex.: Tiago Santos (Resp.))"), a2 = this.ent("2ª assinatura – empresa (ex.: Fulano de Tal (Administrativo))");
+    const a1 = this.ent("Nome do cliente na assinatura (ex.: Tiago Santos (Resp.))"), a2 = this.ent("Seu nome na assinatura – empresa (ex.: Reinaldo Evaci dos Santos (Administrativo))");
     this.e_ass1 = a1.el; this.e_ass2 = a2.el;
-    this.sig1 = P.sigField({ label: "Imagem da assinatura do cliente (opcional)", getName: () => this.e_ass1.value, onChange: () => this.updateSigPreview() });
-    this.sig2 = P.sigField({ label: "Imagem da assinatura da empresa (opcional)", getName: () => this.e_ass2.value, onChange: () => this.updateSigPreview() });
+    this.sig1 = P.sigField({ label: "Imagem da assinatura do cliente (opcional)", title: "Recortar assinatura do cliente", getName: () => this.e_ass1.value, onChange: () => this.updateSigPreview() });
+    this.sig2 = P.sigField({ label: "Imagem da sua assinatura (empresa)", title: "Recortar assinatura da empresa", getName: () => this.e_ass2.value, onChange: () => this.updateSigPreview() });
     this.chk_sigdef = h("input", { type: "checkbox" });
     this.sigPrev = h("div", { class: "paper prop sigprev" });
     this.sigPrevWrap = h("div", { class: "sigprev-wrap" }, this.sigPrev);
     for (const el of [this.t_fecho, this.e_ass1, this.e_ass2]) el.addEventListener("input", () => this.updateSigPreview());
     this._fitPrev = null;
     t.append(card(cardTitle("Fechamento e assinaturas", "Última página: frase de despedida, linha “Aprovo as condições acima descritas em __/__/__ e assinamos:” (fixa) e as duas linhas de assinatura."), f.wrap,
-        h("div", { class: "fg" }, h("div", { class: "stack" }, a1.wrap, this.sig1.el), h("div", { class: "stack" }, a2.wrap, this.sig2.el,
-          h("label", { class: "chk" }, this.chk_sigdef, h("span", { text: "Usar a assinatura da empresa como padrão nas próximas propostas" }))))),
+        h("div", { class: "fg sigsides" },
+          h("div", { class: "stack sigside cli" }, h("span", { class: "side-tag", text: "CLIENTE · lado esquerdo da proposta" }), a1.wrap, this.sig1.el),
+          h("div", { class: "stack sigside emp" }, h("span", { class: "side-tag emp", text: "EMPRESA (você) · lado direito da proposta" }), a2.wrap, this.sig2.el,
+            h("label", { class: "chk" }, this.chk_sigdef, h("span", { text: "Usar esta assinatura da empresa como padrão nas próximas propostas" }))))),
       card(cardTitle("Como fica na proposta", "Prévia reduzida só das assinaturas (as linhas de assinatura e os nomes)."), this.sigPrevWrap));
   }
   updateSigPreview() {

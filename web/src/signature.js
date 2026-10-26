@@ -31,7 +31,8 @@ P.docs.sigPiece = (img, name, scale = 100) => {
 P.docs.sigRow = (i1, n1, i2, n2, s1 = 100, s2 = 100) => `<div class="psig">${P.docs.sigPiece(i1, n1, s1)}${P.docs.sigPiece(i2, n2, s2)}</div>`;
 
 /** Abre o recortador. src = data URL ou URL. Retorna Promise<string|null> (data URL final) */
-P.cropImage = async function (src, { name = "", title = "Recortar assinatura", canRemoveBg = true, scale = 100 } = {}) {
+P.cropImage = async function (src, { name = "", title, canRemoveBg = true, scale = 100 } = {}) {
+  title = title || "Recortar assinatura";
   let img;
   try { img = await P.loadImage(src); } catch (e) { P.info("Imagem", e.message, "danger"); return null; }
   // area de trabalho (no maximo 1600 px para ficar leve no celular)
@@ -135,7 +136,7 @@ P.cropImage = async function (src, { name = "", title = "Recortar assinatura", c
 };
 
 /** Campo "imagem da assinatura": miniatura + escolher / recortar / remover + tamanho. */
-P.sigField = function ({ label, getName, onChange }) {
+P.sigField = function ({ label, title, getName, onChange }) {
   const S = { value: "", scale: 100 };
   const thumb = h("div", { class: "sig-thumb" });
   const bEscolher = btn("Escolher imagem", () => choose(), "secondary sm");
@@ -157,12 +158,12 @@ P.sigField = function ({ label, getName, onChange }) {
     if (!f) return;
     try {
       const url = await P.fileToDataURL(f);
-      const out = await P.cropImage(url, { name: getName ? getName() : "", scale: S.scale });
+      const out = await P.cropImage(url, { name: getName ? getName() : "", scale: S.scale, title });
       if (out) apply(out);
     } catch (e) { P.info("Imagem", e.message, "danger"); }
   }
   async function edit() {
-    const out = await P.cropImage(S.value, { name: getName ? getName() : "", canRemoveBg: false, scale: S.scale });
+    const out = await P.cropImage(S.value, { name: getName ? getName() : "", canRemoveBg: false, scale: S.scale, title });
     if (out) apply(out);
   }
   S.el = h("div", { class: "sigfield" }, h("span", { class: "fl", text: label }), thumb, h("div", { class: "bar" }, bEscolher, bEditar, bRemover), rWrap);

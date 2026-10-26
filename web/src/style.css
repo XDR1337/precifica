@@ -347,6 +347,8 @@ select.in{padding-right:8px}
 @media(prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
 
 /* ---------------- imagem da assinatura */
+.side-tag{align-self:flex-start;font-size:11px;font-weight:700;letter-spacing:.03em;color:#475569;background:#EEF1F5;border-radius:999px;padding:3px 10px}.side-tag.emp{background:var(--soft);color:#9A5B00}
+@media(max-width:760px){.sigsides .sigside.emp{order:-1}}   /* no celular a empresa (quem usa o app) vem primeiro */
 .sigfield{display:flex;flex-direction:column;gap:6px}
 .sig-thumb{height:110px;border:1px dashed #C4CBD6;border-radius:10px;display:grid;place-items:center;color:var(--subtle);font-size:13px;background:#fff linear-gradient(45deg,#f1f3f6 25%,transparent 25%,transparent 75%,#f1f3f6 75%),linear-gradient(45deg,#f1f3f6 25%,transparent 25%,transparent 75%,#f1f3f6 75%);background-size:16px 16px;background-position:0 0,8px 8px;overflow:hidden}
 .sig-thumb img{width:100%;height:100%;object-fit:contain;display:block}

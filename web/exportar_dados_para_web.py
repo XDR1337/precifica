@@ -56,20 +56,44 @@ def export(db_path: Path, out_path: Path) -> Path:
     return out_path
 
 
+def _pausa():
+    """No .exe (duplo clique) a janela fecharia sozinha: espera o Enter para dar tempo de ler."""
+    if getattr(sys, "frozen", False):
+        try:
+            input("\nPressione Enter para fechar...")
+        except EOFError:
+            pass
+
+
 def main(argv):
+    print("Precifica - exportar dados para a versao web\n")
     db_path = Path(argv[1]) if len(argv) > 1 else data_dir() / "precifica.db"
     if not db_path.exists():
-        print(f"Banco de dados nao encontrado: {db_path}")
+        print(f"Nao encontrei o banco de dados do Precifica Desktop:\n  {db_path}\n"
+              "Abra o programa de computador ao menos uma vez (ele cria o banco) ou informe o caminho do arquivo .db.")
+        _pausa()
         return 1
     if len(argv) > 2:
         out = Path(argv[2])
     else:
         docs = Path.home() / "Documents"
         out = (docs if docs.exists() else Path.home()) / f"precifica_para_web_{datetime.now():%Y%m%d}.json"
-    export(db_path, out)
-    print(f"Pronto: {out}\nNa versao web: Configuracoes > Restaurar backup > escolha este arquivo.")
+    try:
+        export(db_path, out)
+    except Exception as ex:  # noqa: BLE001
+        print(f"Nao foi possivel exportar: {ex}")
+        _pausa()
+        return 1
+    print(f"Banco lido:  {db_path}\nArquivo criado:  {out}\n\n"
+          "Proximo passo: na versao web, abra Configuracoes > Restaurar backup e escolha este arquivo.")
+    if getattr(sys, "frozen", False) and sys.platform.startswith("win"):
+        try:
+            import subprocess
+            subprocess.Popen(["explorer", "/select,", str(out)])      # abre a pasta com o arquivo selecionado
+        except OSError:
+            pass
+    _pausa()
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv))

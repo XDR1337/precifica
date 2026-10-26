@@ -24,9 +24,7 @@ No **navegador de cada aparelho** (localStorage). Nada é enviado para a interne
 - o `Precifica.html` aberto como arquivo e o endereço publicado são "sites" diferentes, cada um com seus dados.
 
 ### Levar os dados do programa de computador para a web
-```
-.venv\Scripts\python.exe web\exportar_dados_para_web.py
-```
+Dê dois cliques em **`ExportarDadosParaWeb.exe`** (ou rode `.venv\Scripts\python.exe web\exportar_dados_para_web.py`). Para gerar o .exe de novo, rode `gerar_exportador_exe.bat`.
 Gera `precifica_para_web_AAAAMMDD.json` em *Documentos*. Na web: **Configurações › Restaurar backup** e escolha o arquivo
 (o logotipo personalizado vai junto).
 
