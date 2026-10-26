@@ -1783,8 +1783,8 @@ class ProposalEditor(ctk.CTkToplevel):
         g = ctk.CTkFrame(c, fg_color="transparent")
         g.pack(fill="x", padx=12, pady=(8, 16))
         g.grid_columnconfigure((0, 1), weight=1)
-        self.e_ass1 = self._entry(g, "1ª assinatura – cliente (ex.: Tiago Santos (Resp.))", 0, 0)
-        self.e_ass2 = self._entry(g, "2ª assinatura – empresa (ex.: Fulano de Tal (Administrativo))", 0, 1)
+        self.e_ass1 = self._entry(g, "1ª assinatura – cliente (ex.: Nome do Cliente (Resp.))", 0, 0)
+        self.e_ass2 = self._entry(g, "2ª assinatura – empresa (ex.: Nome do Responsável (Administrativo))", 0, 1)
 
     # ---------------------------------------------------------------- valores iniciais
     def _load(self, cliente, mod):

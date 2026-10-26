@@ -171,7 +171,7 @@ class ProposalEditor {
   tabFecho(t) {
     const f = this.txt("Frase de fechamento", 56);
     this.t_fecho = f.el;
-    const a1 = this.ent("Nome do cliente na assinatura (ex.: Tiago Santos (Resp.))"), a2 = this.ent("Seu nome na assinatura – empresa (ex.: Reinaldo Evaci dos Santos (Administrativo))");
+    const a1 = this.ent("Nome do cliente na assinatura (ex.: Nome do Cliente (Resp.))"), a2 = this.ent("Seu nome na assinatura – empresa (ex.: Nome do Responsável (Administrativo))");
     this.e_ass1 = a1.el; this.e_ass2 = a2.el;
     this.sig1 = P.sigField({ label: "Imagem da assinatura do cliente (opcional)", title: "Recortar assinatura do cliente", getName: () => this.e_ass1.value, onChange: () => this.updateSigPreview() });
     this.sig2 = P.sigField({ label: "Imagem da sua assinatura (empresa)", title: "Recortar assinatura da empresa", getName: () => this.e_ass2.value, onChange: () => this.updateSigPreview() });

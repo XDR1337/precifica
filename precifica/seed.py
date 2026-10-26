@@ -238,8 +238,8 @@ MODELO_PROPOSTA = {
 EXEMPLO_PROPOSTA = {
     "numero": 787, "data": "2026-10-05", "validade_dias": 15,
     "titulo": "Projeto e Execução Elétrica - Obra Kitnets (20 unidades)",
-    "aos_cuidados": "Tiago Santos",
-    "cliente_nome": "Tiago Santos",
+    "aos_cuidados": "Nome do Cliente",
+    "cliente_nome": "Nome do Cliente",
     "objeto": ("Prestação de serviços de engenharia elétrica contemplando a elaboração do projeto elétrico completo, "
                "execução das instalações elétricas internas (mão de obra) e o fornecimento completo (material, trâmite e "
                "execução) do padrão de entrada de energia para o complexo habitacional de 20 kitnets e áreas comuns."),
@@ -350,6 +350,6 @@ EXEMPLO_PROPOSTA = {
                     "comercial (aditivo).")),
     ],
     "fecho": FECHO_PADRAO,
-    "assinatura1": "Tiago Santos (Resp.)",
-    "assinatura2": "Reinaldo Evaci dos Santos (Administrativo)",
+    "assinatura1": "Nome do Cliente (Resp.)",
+    "assinatura2": "Nome do Responsável (Administrativo)",
 }

@@ -143,14 +143,15 @@ P.sigField = function ({ label, title, getName, onChange }) {
   const bEditar = btn("Recortar", () => edit(), "secondary sm");
   const bRemover = btn("Remover", () => { S.value = ""; draw(); onChange && onChange(); }, "danger-ghost sm");
   const rng = h("input", { type: "range", min: 40, max: 160, step: 5, value: 100, class: "range" });
-  const rLbl = h("span", { class: "fl", text: "Tamanho: 100%" });
+  const rLbl = h("span", { class: "fl", text: "Tamanho: 100%" });   // sempre visivel; so liga depois de escolher a imagem
   const rWrap = h("label", { class: "fld" }, rLbl, rng);
-  rng.addEventListener("input", () => { S.scale = +rng.value; rLbl.textContent = `Tamanho: ${S.scale}%`; onChange && onChange(); });
+  rng.addEventListener("input", () => { S.scale = +rng.value; rLbl.textContent = `Tamanho da assinatura: ${S.scale}%`; onChange && onChange(); });
   const draw = () => {
     thumb.replaceChildren(S.value ? h("img", { src: S.value, alt: "Assinatura", style: { transform: `scale(${Math.min(1, S.scale / 100)})` } }) : h("span", { text: "Sem imagem" }));
     bEscolher.textContent = S.value ? "Trocar imagem" : "Escolher imagem";
-    bEditar.style.display = bRemover.style.display = rWrap.style.display = S.value ? "" : "none";
-    rng.value = S.scale; rLbl.textContent = `Tamanho: ${S.scale}%`;
+    bEditar.style.display = bRemover.style.display = S.value ? "" : "none";
+    rng.disabled = !S.value; rWrap.style.opacity = S.value ? "1" : ".5";
+    rng.value = S.scale; rLbl.textContent = S.value ? `Tamanho da assinatura: ${S.scale}%` : "Tamanho da assinatura (escolha uma imagem primeiro)";
   };
   const apply = (out) => { S.value = out.url; S.scale = out.scale; draw(); onChange && onChange(); };
   async function choose() {
