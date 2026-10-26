@@ -283,7 +283,8 @@ P.definePage("Configurações", {
   EMPRESA: [["empresa_nome", "Razão social / nome", 2], ["empresa_fantasia", "Nome fantasia", 1], ["empresa_cnpj", "CNPJ / CPF", 1], ["empresa_telefone", "Telefone / WhatsApp", 1], ["empresa_email", "E-mail", 1],
     ["empresa_endereco", "Endereço", 2], ["empresa_bairro", "Bairro", 1], ["empresa_cidade", "Cidade", 1], ["empresa_uf", "UF", 1], ["empresa_cep", "CEP", 1], ["empresa_sigla", "Nome curto nos textos (ex.: ACRS)", 1],
     ["empresa_site", "Site / Instagram", 1], ["proposta_assinante_empresa", "Assinante da empresa nas propostas (nome e função)", 2]],
-  PARAMS: [["lucro_desejado_pct", "Lucro desejado padrão (%)"], ["proposta_proximo_numero", "Próximo nº de proposta"], ["proposta_validade_dias", "Validade das propostas (dias)"]],
+  PARAMS: [["lucro_desejado_pct", "Lucro desejado padrão (%)"], ["proposta_proximo_numero", "Próximo nº de proposta"], ["proposta_validade_dias", "Validade das propostas (dias)"],
+    ["adicional_hora_extra_pct", "Adicional de hora extra (%)"], ["adicional_noturno_pct", "Adicional noturno (%)"]],
   ENC: [["enc_ferias", "Férias + 1/3 (%)"], ["enc_13", "13º salário (%)"], ["enc_13_ferias", "13º sobre férias (%)"], ["enc_inss", "INSS patronal (%)"], ["enc_sat", "SAT/RAT (%)"],
     ["enc_sal_educacao", "Salário-educação (%)"], ["enc_sistema_s", "INCRA/Sistema S (%)"], ["enc_fgts", "FGTS (%)"], ["enc_fgts_rescisao", "FGTS rescisão (%)"], ["enc_prolabore_inss", "INSS sobre pró-labore (%)"]],
   actions: () => [btn("Salvar configurações", () => P.pages["Configurações"].salvar())],
@@ -293,7 +294,7 @@ P.definePage("Configurações", {
     const numeric = (k) => k.startsWith("enc_") || this.PARAMS.some((p) => p[0] === k);
     const mk = ([key, label, span]) => {
       const fd = { key, label, span: span || 1, kind: key === "empresa_uf" ? "combo" : numeric(key) ? "num" : "text", options: key === "empresa_uf" ? SEED.UFS : null, mode: key === "empresa_telefone" ? "tel" : key === "empresa_email" ? "email" : null };
-      const v = cfg[key] ?? "";
+      const v = cfg[key] ?? (P.CFG_DEFAULTS[key] ?? "");
       const inp = P.inp(fd, numeric(key) ? numInput(v, 4) : v);
       els[key] = inp;
       return P.field(fd, inp);
@@ -305,7 +306,15 @@ P.definePage("Configurações", {
       btn("Escolher imagem", () => this.escolherLogo(pg), "secondary sm"), btn("Voltar ao logo da ACRS", () => { pg.db.setCfg("empresa_logo", ""); P.app.changed("Logotipo da ACRS restaurado"); }, "ghost sm"));
     const empresa = card(cardTitle("Sua empresa", "Aparece no cabeçalho das propostas e dos relatórios"), h("div", { class: "cfg-top" }, h("div", { class: "fg" }, this.EMPRESA.map(mk)), logoBox));
     const params = card(cardTitle("Parâmetros de preço e propostas"), h("div", { class: "fg c3" }, this.PARAMS.map(([k, l]) => mk([k, l, 1]))),
+      h("p", { class: "fh", text: "Hora extra e adicional noturno: percentuais somados ao custo da hora quando você escolhe “Hora extra”, “Adicional noturno” ou “Hora extra noturna” na mão de obra de um serviço (CLT: 50% e 20%). A hora extra noturna aplica os dois, um sobre o outro." }),
       h("p", { class: "fh", text: "Os textos padrão das propostas (escopo, premissas, garantia…) ficam no próprio editor de proposta: menu “Modelos de texto…” › “Salvar estes textos como padrão”." }));
+    const listas = card(cardTitle("Categorias e unidades personalizadas", "Itens criados por você (aparecem nas listas junto com os padrões e sincronizam com a equipe)."),
+      ...Object.entries(P.LISTAS).map(([key, def]) => {
+        const custom = P.lists.custom(key);
+        return h("div", { class: "lista" }, h("div", { class: "lista-h" }, h("b", { text: def.label }), btn("+ Adicionar", async () => { const v = await P.ask("Nova " + def.item, [{ key: "nome", label: "Nome", required: true }], {}, { ok: "Adicionar" }); if (v) { P.lists.add(key, v.nome); P.app.changed("Item adicionado"); } }, "secondary xs")),
+          custom.length ? h("div", { class: "chips" }, custom.map((c) => h("span", { class: "chip" }, c, h("button", { type: "button", title: "Remover", text: "✕", onClick: async () => { if (await P.confirm("Remover da lista", `Remover “${c}” da lista? Os itens que já usam esse valor continuam como estão.`, "Remover", true)) { P.lists.remove(key, c); P.app.changed("Item removido"); } } }))))
+            : h("p", { class: "fh", text: "Nenhum item personalizado ainda." }));
+      }));
     const enc = card(cardTitle("Encargos sobre salários", "CLT: férias, 13º e FGTS (no Simples Nacional, anexos I a III, o INSS patronal é 0%). Pró-labore: 11% de INSS."),
       h("div", { class: "fg c3" }, this.ENC.map(([k, l]) => mk([k, l, 1]))), h("div", { class: "right" }, btn("Restaurar encargos padrão", () => { pg.db.setMany(SEED.ENCARGOS_PADRAO); P.app.changed("Encargos restaurados"); }, "ghost")));
     const tutOn = Math.floor(fnum(cfg.tutorial_nao_mostrar, 0)) < 1;
@@ -334,7 +343,7 @@ P.definePage("Configurações", {
         : [btn("Conectar ao Dropbox", () => { saveAdv(); sy.connect().catch((e) => P.info("Não foi possível conectar", e.message, "danger")); })]),
       h("p", { class: "fh", text: "Se aparecer erro ao conectar, a chave do app Dropbox pode estar errada: avise o administrador." }),
       h("p", { class: "fh", text: "Privacidade: o Dropbox vai informar que o app pode acessar arquivos. O app só lê e grava o arquivo precifica-dados.json na pasta compartilhada." }), adv);    const sobre = card(h("h3", { text: `${P.APP_NAME} ${P.APP_VERSION}` }), h("p", { class: "cs", text: `Desenvolvido pela ${P.APP_AUTHOR} (projeto de extensão PROEX – UniBrasil) como alternativa à Planilha de Precificação EG3 para quem não tem Microsoft Excel. Os cálculos seguem a planilha R02, com as correções apontadas no relatório final do projeto.` }));
-    return [empresa, params, enc, tut, syncCard, dados, sobre];
+    return [empresa, params, listas, enc, tut, syncCard, dados, sobre];
   },
   salvar() {
     const vals = {};

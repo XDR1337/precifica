@@ -63,7 +63,7 @@ P.app = {
     }
     this.companyLbl = h("b", { class: "company" });
     const side = h("aside", { class: "side", id: "side" },
-      h("div", { class: "brand" }, h("div", { class: "logo-card" }, h("img", { src: P.LOGO, alt: "ACRS" })), h("div", { class: "bt" }, h("b", { text: "Precifica" }), h("span", { text: "PRECIFICAÇÃO E PROPOSTAS" }))),
+      h("div", { class: "brand" }, h("div", { class: "logo-card" }, (this.sideLogo = h("img", { src: P.LOGO, alt: "Logotipo" }))), h("div", { class: "bt" }, h("b", { text: "Precifica" }), h("span", { text: "PRECIFICAÇÃO E PROPOSTAS" }))),
       nav, h("div", { class: "sfoot" }, P.syncBadge(), this.companyLbl, h("span", { text: `v${P.APP_VERSION} · por ${P.APP_AUTHOR}` })));
     this.topTitle = h("span", { class: "tt" });
     const top = h("header", { class: "top" }, h("button", { type: "button", class: "burger", "aria-label": "Abrir menu", text: "☰", onClick: () => document.body.classList.toggle("nav-open") }), this.topTitle, h("span", { class: "grow" }), P.syncBadge());
@@ -165,6 +165,8 @@ P.app = {
     const c = this.engine.cfg;
     const txt = c.empresa_fantasia || c.empresa_nome || "";
     if (this.companyLbl.textContent !== txt) this.companyLbl.textContent = txt;
+    const logo = c.empresa_logo && String(c.empresa_logo).startsWith("data:") ? c.empresa_logo : P.LOGO;       // logotipo escolhido em Configuracoes vale no menu todo
+    if (this.sideLogo && this.sideLogo._src !== logo) { this.sideLogo.src = logo; this.sideLogo._src = logo; }
   },
   openAnalysis(tipo, id) {
     P.pages["Análise de preço"].state.pending = { tipo, id };

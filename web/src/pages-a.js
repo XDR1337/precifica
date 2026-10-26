@@ -116,7 +116,7 @@ P.definePage("Serviços e fichas", {
       { title: "Horas de mão de obra", value: `${num(f.horas, 2)} h`, sub: `${num(f.horas * it.previsao, 1)} h no mês`, accent: PRIMARY },
     ]);
     // dados do servico
-    const fields = [{ key: "nome", label: "Nome do serviço", span: 2 }, { key: "unidade", label: "Unidade", kind: "combo", options: ["Serviço", "Unidade", "Metro", "Hora", "Ponto", "Diária", "Visita"] },
+    const fields = [{ key: "nome", label: "Nome do serviço", span: 2 }, { key: "unidade", label: "Unidade", kind: "list", listKey: "unidades_servico" },
       { key: "preco", label: "Preço atual (R$)", kind: "money" }, { key: "imposto_pct", label: "Impostos sobre vendas (%)", kind: "pct" }, { key: "cartao_pct", label: "Taxa da maquininha (%)", kind: "pct" },
       { key: "app_pct", label: "Taxa de aplicativo (%)", kind: "pct" }, { key: "comissao_pct", label: "Comissão (%)", kind: "pct" }, { key: "previsao", label: "Previsão de vendas/mês", kind: "num" },
       { key: "descricao", label: "Descrição para propostas", kind: "textarea", span: 2, height: 60 }];
@@ -136,9 +136,9 @@ P.definePage("Serviços e fichas", {
       h("div", { class: "right" }, btn("Salvar dados do serviço", save)));
     // mao de obra
     const mo = card(cardTitle("Mão de obra", "Quem executa e quantas horas leva (inclua o tempo no cliente)", btn("+ Adicionar", () => this.addMod(pg, sid), "sm")),
-      table([{ key: "nome", label: "Colaborador", pri: true }, { key: "cargo", label: "Cargo", hm: true }, { key: "custo_hora", label: "Custo/hora", align: "r", fmt: M },
+      table([{ key: "nome", label: "Colaborador", pri: true }, { key: "cargo", label: "Cargo", hm: true }, { key: "tipo_hora", label: "Tipo de hora", fmt: (v) => P.tipoHoraLabel(v) }, { key: "custo_hora", label: "Custo/hora", align: "r", fmt: M },
         { key: "horas", label: "Horas", align: "r", fmt: N2 }, { key: "total", label: "Custo total", align: "r", fmt: M }], f.mod,
-      { onOpen: (r) => this.editLine(pg, r, "ficha_mod", "horas", "Horas de " + r.nome, "Horas atualizadas"), empty: "Adicione quem executa o serviço" }));
+      { onOpen: (r) => this.editMod(pg, r), empty: "Adicione quem executa o serviço" }));
     const ins = card(cardTitle("Insumos, materiais e terceiros", "Itens do cadastro de insumos (inclusive deslocamento em km)", btn("+ Adicionar", () => this.addIns(pg, sid), "sm")),
       table([{ key: "descricao", label: "Insumo", pri: true }, { key: "unidade", label: "Medida", hm: true }, { key: "custo_unit", label: "Custo unitário", align: "r", fmt: M4 },
         { key: "quantidade", label: "Qtde", align: "r", fmt: N2 }, { key: "total", label: "Custo total", align: "r", fmt: M }], f.insumos,
@@ -187,8 +187,22 @@ P.definePage("Serviços e fichas", {
     const r = await P.pick("Escolha o colaborador", [{ key: "nome", label: "Nome", pri: true }, { key: "cargo", label: "Cargo" }, { key: "setor", label: "Setor", hm: true },
       { key: "custo_hora", label: "Custo/hora", align: "r", fmt: M }], e.equipeCalc());
     if (!r) return;
-    const v = await P.ask("Horas de mão de obra", [{ key: "horas", label: `Horas de ${r.nome} neste serviço`, kind: "num", required: true, min: 0, help: "Ex.: 1,5 = uma hora e meia" }], { horas: 1 }, { ok: "Adicionar" });
-    if (v) { pg.db.save("ficha_mod", { servico_id: sid, equipe_id: r.id, horas: v.horas }); P.app.changed("Mão de obra adicionada"); }
+    const mf = this.modFields(e, r.nome);
+    const v = await P.ask("Horas de mão de obra", mf.fields, { horas: 1, tipo: mf.labels.normal }, { ok: "Adicionar" });
+    if (v) { pg.db.save("ficha_mod", { servico_id: sid, equipe_id: r.id, horas: v.horas, tipo_hora: mf.key(v.tipo) }); P.app.changed("Mão de obra adicionada"); }
+  },
+  /** Campos "horas" + "tipo de hora" (normal, extra, noturna). Os percentuais vem das Configuracoes. */
+  modFields(e, nome) {
+    const he = num(e.c("adicional_hora_extra_pct", 50), 0), an = num(e.c("adicional_noturno_pct", 20), 0);
+    const labels = { normal: "Hora normal", extra: `Hora extra (+${he}%)`, noturna: `Adicional noturno (+${an}%)`, extra_noturna: `Hora extra noturna (+${he}% e +${an}%)` };
+    return { labels, key: (txt) => Object.keys(labels).find((k) => labels[k] === txt) || "normal", fields: [
+      { key: "horas", label: `Horas de ${nome} neste serviço`, kind: "num", required: true, min: 0, help: "Ex.: 1,5 = uma hora e meia" },
+      { key: "tipo", label: "Tipo de hora", kind: "choice", options: Object.values(labels), help: "Hora extra e adicional noturno aumentam o custo da hora. Os percentuais ficam em Configurações." }] };
+  },
+  async editMod(pg, r) {
+    const mf = this.modFields(pg.eng, r.nome);
+    const v = await P.ask("Editar mão de obra", mf.fields, { horas: r.horas, tipo: mf.labels[r.tipo_hora] || mf.labels.normal }, { extra: [{ text: "Remover", kind: "danger-ghost", fn: () => { pg.db.remove("ficha_mod", r.id); P.app.changed("Item removido"); } }] });
+    if (v) { pg.db.save("ficha_mod", { id: r.id, horas: v.horas, tipo_hora: mf.key(v.tipo) }); P.app.changed("Mão de obra atualizada"); }
   },
   async addIns(pg, sid) {
     const rows = [...pg.eng.insumos.values()].map((r) => P.Engine.insumoCalc(r)).sort((a, b) => a.descricao.toLowerCase() < b.descricao.toLowerCase() ? -1 : 1);
@@ -225,8 +239,8 @@ P.definePage("Insumos e preços", {
   subtitle: `Materiais, deslocamento, terceiros e preços de mercado usados nas fichas técnicas. Já vem com ${SEED.PRECOS_REFERENCIA.length} preços de referência de serviços elétricos levantados pela EG3 (Curitiba, set/2026).`,
   actions: () => [btn("Reajustar preços", () => P.pages["Insumos e preços"].reajustar(), "secondary"), btn("+ Novo insumo", () => P.pages["Insumos e preços"].novo())],
   FIELDS: [
-    { key: "descricao", label: "Descrição", required: true, span: 2 }, { key: "unidade", label: "Unidade de medida", kind: "combo", options: SEED.UNIDADES },
-    { key: "categoria", label: "Categoria", kind: "combo", options: ["Material", "Mão de obra terceirizada", "Deslocamento", "Referência de mercado", "Outros"] },
+    { key: "descricao", label: "Descrição", required: true, span: 2 }, { key: "unidade", label: "Unidade de medida", kind: "list", listKey: "unidades" },
+    { key: "categoria", label: "Categoria", kind: "list", listKey: "categorias" },
     { key: "custo", label: "Custo pago (R$)", kind: "money", required: true, min: 0, help: "Quanto você paga pela quantidade bruta." },
     { key: "qtde_bruta", label: "Quantidade bruta", kind: "num", min: 0, help: "Quantidade comprada (ex.: rolo de 100 m)." },
     { key: "qtde_liquida", label: "Quantidade líquida (aproveitada)", kind: "num", min: 0, help: "O que realmente é usado após perdas (ex.: 95 m)." },
@@ -365,7 +379,7 @@ P.definePage("Revenda", {
   subtitle: "Materiais que você compra e revende ao cliente (ex.: disjuntores, tomadas, luminárias).",
   actions: () => [btn("Reajustar preços", () => P.bulkAdjust({ title: "Reajustar preços de venda da revenda", table: "revenda", field: "preco", label: "Preço de venda", rows: P.app.engine.revendas }), "secondary"), btn("+ Novo produto", () => P.pages["Revenda"].novo())],
   FIELDS: [
-    { key: "nome", label: "Produto", required: true, span: 2 }, { key: "unidade", label: "Unidade de medida", kind: "combo", options: SEED.UNIDADES },
+    { key: "nome", label: "Produto", required: true, span: 2 }, { key: "unidade", label: "Unidade de medida", kind: "list", listKey: "unidades" },
     { key: "qtde", label: "Quantidade comprada", kind: "num", min: 0, help: "Ex.: caixa com 10 unidades" }, { key: "custo", label: "Valor pago na compra (R$)", kind: "money", min: 0, help: "Valor total pela quantidade" },
     { key: "preco", label: "Preço de venda unitário (R$)", kind: "money", min: 0 }, { key: "imposto_pct", label: "Impostos (%)", kind: "pct", min: 0 },
     { key: "cartao_pct", label: "Maquininha (%)", kind: "pct", min: 0 }, { key: "app_pct", label: "Aplicativo (%)", kind: "pct", min: 0 },

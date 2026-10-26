@@ -28,7 +28,7 @@ const PARCELA_FIELDS = [
   { key: "detalhe", label: "Detalhe entre parênteses", span: 2, help: "Ex.: 30 dias após o aceite  ·  sai impresso como “Parcela 2: R$ 5.611,67 (30 dias após o aceite).”" }];
 const ITEM_FIELDS = [
   { key: "descricao", label: "Descrição do item", kind: "textarea", height: 90, required: true, span: 2 }, { key: "quantidade", label: "Quantidade", kind: "num", min: 0 },
-  { key: "unidade", label: "Unidade", kind: "combo", options: ["", "un", "m", "m²", "km", "h", "ponto", "serviço", "diária", "kit"] },
+  { key: "unidade", label: "Unidade", kind: "list", listKey: "unidades_proposta" },
   { key: "valor_unit", label: "Valor unitário (R$)", kind: "money", min: 0, span: 2, help: "No PDF sai só o valor do item (quantidade × valor unitário). Quando a quantidade não é 1, ela aparece entre parênteses na descrição." }];
 const secaoToForm = (it) => ({ ...it, nova_pagina: it.nova_pagina ? "Sim" : "Não" });
 const secaoFromForm = (v) => ({ ...v, nova_pagina: v.nova_pagina === "Sim" });

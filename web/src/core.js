@@ -62,7 +62,7 @@ const COLS = {
   custos_fixos: { descricao: "", valor: 0 },
   imobilizado: { descricao: "", valor: 0, vida_util: 10 },
   servicos: { nome: "", descricao: "", unidade: "Serviço", preco: 0, imposto_pct: 0, cartao_pct: 0, app_pct: 0, comissao_pct: 0, previsao: 0 },
-  ficha_mod: { servico_id: 0, equipe_id: 0, horas: 0 },
+  ficha_mod: { servico_id: 0, equipe_id: 0, horas: 0, tipo_hora: "normal" },
   ficha_insumo: { servico_id: 0, insumo_id: 0, quantidade: 0 },
   revenda: { nome: "", unidade: "Unidade", qtde: 1, custo: 0, preco: 0, imposto_pct: 0, cartao_pct: 0, app_pct: 0, comissao_pct: 0, previsao: 0 },
   clientes: { nome: "", documento: "", endereco: "", complemento: "", bairro: "", cidade: "", uf: "", cep: "", email: "", telefone: "", contato: "", obs: "" },
@@ -414,6 +414,11 @@ class Engine {
   }
   equipeCalc() { return [...this.equipe.values()].map((e) => this.colaborador(e)); }
   folhaTotal(setor = null) { return this.equipeCalc().filter((c) => setor === null || c.setor === setor).reduce((a, c) => a + c.total, 0); }
+  /** Multiplicador do custo-hora: hora extra e adicional noturno vem das Configuracoes (padrao CLT: 50% e 20%). */
+  multHora(tipo) {
+    const he = this.c("adicional_hora_extra_pct", 50) / 100, an = this.c("adicional_noturno_pct", 20) / 100;
+    return tipo === "extra" ? 1 + he : tipo === "noturna" ? 1 + an : tipo === "extra_noturna" ? (1 + he) * (1 + an) : 1;
+  }
   // ---- capacidade produtiva
   produtividade() { return Math.max(0.01, this.c("produtividade_pct", 75) / 100); }
   capacidade() {
@@ -452,7 +457,8 @@ class Engine {
       if (!e) continue;
       const c = this.colaborador(e);
       const h = fnum(l.horas);
-      mod.push({ id: l.id, equipe_id: e.id, nome: e.nome, cargo: e.cargo || "", custo_hora: c.custo_hora, horas: h, total: h * c.custo_hora });
+      const tipo = l.tipo_hora || "normal", mult = this.multHora(tipo);
+      mod.push({ id: l.id, equipe_id: e.id, nome: e.nome, cargo: e.cargo || "", custo_hora: c.custo_hora * mult, custo_hora_base: c.custo_hora, mult, tipo_hora: tipo, horas: h, total: h * c.custo_hora * mult });
     }
     for (const l of this.fins) {
       if (l.servico_id !== sid) continue;
@@ -692,4 +698,39 @@ P.modeloTextos = function (cfg) {
   const base = P.SEED.MODELO_PROPOSTA;
   return { escopo_intro: m.escopo_intro ?? base.escopo_intro, escopo_nota: m.escopo_nota ?? base.escopo_nota,
     secoes_pre: m.secoes_pre ?? base.secoes_pre, secoes_pos: m.secoes_pos ?? base.secoes_pos, fecho: m.fecho ?? P.SEED.FECHO_PADRAO };
+};
+
+// ------------------------------------------------------------------ tipos de hora e listas personalizaveis
+P.TIPOS_HORA = [["normal", "Hora normal"], ["extra", "Hora extra"], ["noturna", "Adicional noturno"], ["extra_noturna", "Hora extra noturna"]];
+P.tipoHoraLabel = (k) => (P.TIPOS_HORA.find((t) => t[0] === k) || P.TIPOS_HORA[0])[1];
+P.CFG_DEFAULTS = { adicional_hora_extra_pct: 50, adicional_noturno_pct: 20 };
+P.LISTAS = {
+  unidades: { label: "Unidades de medida (insumos e revenda)", item: "unidade de medida", base: () => P.SEED.UNIDADES },
+  categorias: { label: "Categorias de insumos", item: "categoria", base: () => ["Material", "Mão de obra terceirizada", "Deslocamento", "Referência de mercado", "Outros"] },
+  unidades_servico: { label: "Unidades dos serviços", item: "unidade do serviço", base: () => ["Serviço", "Unidade", "Metro", "Hora", "Ponto", "Diária", "Visita"] },
+  unidades_proposta: { label: "Unidades nos itens da proposta", item: "unidade", base: () => ["un", "m", "m²", "km", "h", "ponto", "serviço", "diária", "kit"] },
+};
+/** Listas (base do programa + itens criados pelo usuario, guardados na configuracao "listas_json" e sincronizados). */
+P.lists = {
+  _all() { return P.json(P.app.db.cfg("listas_json"), {}); },
+  custom(key) { return this._all()[key] || []; },
+  get(key, current) {
+    const all = [...P.LISTAS[key].base()];
+    for (const c of this.custom(key)) if (!all.some((x) => x.toLowerCase() === c.toLowerCase())) all.push(c);
+    if (current && !all.includes(current)) all.push(current);
+    return all;
+  },
+  add(key, nome) {
+    nome = String(nome || "").trim();
+    if (!nome) return "";
+    const ex = this.get(key).find((x) => x.toLowerCase() === nome.toLowerCase());
+    if (ex) return ex;
+    const j = this._all(); j[key] = [...(j[key] || []), nome];
+    P.app.db.setCfg("listas_json", JSON.stringify(j));
+    return nome;
+  },
+  remove(key, nome) {
+    const j = this._all(); j[key] = (j[key] || []).filter((x) => x !== nome);
+    P.app.db.setCfg("listas_json", JSON.stringify(j));
+  },
 };

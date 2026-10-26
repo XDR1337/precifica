@@ -113,7 +113,7 @@ P.docs.report = function (e, secoes) {
       if (!(f.mod.length || f.insumos.length)) continue;
       any = true;
       let blk = H3(s.nome);
-      if (f.mod.length) blk += T(["Mão de obra", "Cargo/função", "Custo/hora", "Horas", "Custo total"], f.mod.map((m) => [m.nome, m.cargo, dmoney(m.custo_hora), dnum(m.horas, 2), dmoney(m.total)]), ["l", "l", "r", "r", "r"], { w: [32, 24, 15, 12, 17] });
+      if (f.mod.length) blk += T(["Mão de obra", "Cargo/função", "Custo/hora", "Horas", "Custo total"], f.mod.map((m) => [m.nome + (m.tipo_hora && m.tipo_hora !== "normal" ? ` (${P.tipoHoraLabel(m.tipo_hora).toLowerCase()})` : ""), m.cargo, dmoney(m.custo_hora), dnum(m.horas, 2), dmoney(m.total)]), ["l", "l", "r", "r", "r"], { w: [32, 24, 15, 12, 17] });
       if (f.insumos.length) blk += T(["Insumo / serviço", "Medida", "Custo unitário", "Qtde", "Custo total"], f.insumos.map((i) => [i.descricao, i.unidade, dmoney(i.custo_unit, 2), dnum(i.quantidade, 2), dmoney(i.total)]), ["l", "l", "r", "r", "r"], { w: [38, 18, 15, 12, 17] });
       blk += T(["Totais", ""], [["Total de horas alocadas", `${dnum(f.horas, 2)} h`], ["Custo com mão de obra direta", dmoney(f.custo_mod)], ["Custo com insumos", dmoney(f.custo_md)], ["CUSTO TOTAL", dmoney(f.total)]], ["l", "r"], { total: true, plain: true, nohead: true, w: [83, 17] });
       r += `<div class="keep">${blk}</div>`;
@@ -190,7 +190,7 @@ P.docs.analysis = function (e, a) {
     const f = e.ficha(it.id);
     if (f.mod.length || f.insumos.length) {
       b += H2("Composição do custo (ficha técnica)");
-      const rows = f.mod.map((m) => [m.nome, `${dnum(m.horas, 2)} h × ${dmoney(m.custo_hora)}`, dmoney(m.total)])
+      const rows = f.mod.map((m) => [m.nome + (m.tipo_hora && m.tipo_hora !== "normal" ? ` (${P.tipoHoraLabel(m.tipo_hora).toLowerCase()})` : ""), `${dnum(m.horas, 2)} h × ${dmoney(m.custo_hora)}`, dmoney(m.total)])
         .concat(f.insumos.map((i) => [i.descricao, `${dnum(i.quantidade, 2)} ${i.unidade} × ${dmoney(i.custo_unit)}`, dmoney(i.total)]));
       rows.push(["CUSTO DIRETO TOTAL", "", dmoney(f.total)]);
       b += T(["Item", "Cálculo", "Custo"], rows, ["l", "l", "r"], { total: true });

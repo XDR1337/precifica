@@ -115,6 +115,21 @@ P.inp = function (f, value) {
     const cur = value !== null && value !== undefined && value !== "" ? String(value) : opts[0];
     if (!opts.includes(cur)) el.append(h("option", { value: cur, text: cur }));
     el.value = cur;
+  } else if (kind === "list") {                      // lista com "criar nova..." (categorias, unidades)
+    const NEW = "__novo__";
+    el = h("select", { class: "in" });
+    const fill = (cur) => {
+      const opts = P.lists.get(f.listKey, cur);
+      el.replaceChildren(...(cur ? [] : [h("option", { value: "", text: "—" })]), ...opts.map((o) => h("option", { value: o, text: o })), h("option", { value: NEW, text: "➕ Criar nova…" }));
+      el.value = cur || ""; el._prev = el.value;
+    };
+    fill(value !== null && value !== undefined ? String(value) : "");
+    el.addEventListener("change", async () => {
+      if (el.value !== NEW) { el._prev = el.value; return; }
+      const prev = el._prev;
+      const v = await P.ask("Nova " + (P.LISTAS[f.listKey].item), [{ key: "nome", label: "Nome", required: true }], {}, { ok: "Adicionar" });
+      if (v) fill(P.lists.add(f.listKey, v.nome)); else el.value = prev;
+    });
   } else if (kind === "combo") {
     const id = "dl" + Math.random().toString(36).slice(2, 8);
     el = h("input", { class: "in", type: "text", list: id, autocomplete: "off", value: value == null ? "" : String(value) });
@@ -133,6 +148,7 @@ P.fieldValue = function (f, el) {
   const kind = f.kind || "text";
   if (kind === "textarea") return el.value.trim();
   const raw = el.value.trim();
+  if (kind === "list") return raw === "__novo__" ? "" : raw;
   if (kind === "num" || kind === "money" || kind === "pct") {
     if (raw && fnum(raw, null) === null) throw new Error(`“${f.label}” precisa ser um número.`);
     const v = fnum(raw);
