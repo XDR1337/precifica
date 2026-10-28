@@ -394,3 +394,4 @@ select.in{padding-right:8px}
 .trialchip{position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:260;background:#B45309;color:#fff;border-radius:999px;padding:6px 8px 6px 14px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:10px;box-shadow:0 4px 14px rgba(0,0,0,.35);white-space:nowrap}
 .trialchip button{border:0;background:#fff;color:#B45309;border-radius:999px;padding:4px 10px;font:inherit;font-size:12px;cursor:pointer}
 .adm-rows{display:flex;flex-direction:column;gap:8px}.adm-rows .auth-row{background:var(--card)}
+.adm-kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:6px}.adm-kv div{background:var(--bg);border-radius:8px;padding:8px 10px;min-width:0}.adm-kv span{display:block}.adm-kv b{display:block;overflow-wrap:anywhere;font-size:13px}

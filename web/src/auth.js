@@ -183,6 +183,7 @@ P.auth = {
     try { acc = await this.readAccess(folder); }
     catch (e) { if (navigator.onLine && !/Failed to fetch|NetworkError|Load failed/i.test(e.message)) throw e; acc = rd(ACCESS + slugOf(folder)); if (!acc) throw new Error("Sem internet e esta empresa ainda não foi aberta neste aparelho."); }
     if (!acc) return { claim: true };
+    if (acc.suspensa) throw new Error("Esta empresa está suspensa. Fale com o administrador do sistema.");
     const u = (acc.users || []).find((x) => x.u === user.trim().toLowerCase());
     if (!u || (await hashPw(pw, u.salt)) !== u.hash) throw new Error("Usuário ou senha incorretos.");
     this.s.folder = folder; this.s.empresa = acc.empresa || ""; this.s.admin = false; this.s.lastUser = u.u;
@@ -308,24 +309,27 @@ P.auth = {
     if (!r) return;
     wr(ACCESS + this.slug(), r.data);
     const u = (r.data.users || []).find((x) => x.u === this.me.u);
+    if (r.data.suspensa) { this.s.kick = "Esta empresa foi suspensa. Fale com o administrador do sistema."; this.leave(true); return; }
     if (!u || u.hash !== this.me.k || u.papel !== this.me.papel) { this.s.kick = "Seu acesso a esta empresa foi alterado. Entre novamente."; this.leave(true); }
   },
 
   // ---------------------------------------------------------------- usuarios (dono)
-  async editUsers(fn) {
-    const d = dbx();
+  /** Aponta o Dropbox para a pasta de outra empresa (painel do administrador). */
+  useFolder(folder) { if (!folder) return; const d = dbx(); d.forced = folder; d.folderOk = null; d.basePath = null; },
+  async editUsers(fn, folder) {
+    const d = dbx(); this.useFolder(folder);
     for (let i = 0; ; i++) {
       const tk = await this.token(); await d.checkFolder(tk);
       const r = await d.getJson(tk, d.basePath + "/" + FILE);
-      const acc = r ? r.data : { v: 1, empresa: this.s.empresa, users: [] };
+      const acc = r ? r.data : { v: 1, empresa: this.s.empresa || slugOf(d.forced), users: [] };
       fn(acc);
       if (!(acc.users || []).some((x) => x.papel === "dono")) throw new Error("A empresa precisa ter pelo menos um dono.");
-      try { await d.putJson(tk, d.basePath + "/" + FILE, acc, r ? r.rev : null); wr(ACCESS + this.slug(), acc); return acc; }
+      try { await d.putJson(tk, d.basePath + "/" + FILE, acc, r ? r.rev : null); wr(ACCESS + slugOf(d.forced || this.s.folder), acc); return acc; }
       catch (e) { if (e.conflict && i < 4) continue; throw e; }
     }
   },
-  async users() { const tk = await this.token(), d = dbx(); await d.checkFolder(tk); const r = await d.getJson(tk, d.basePath + "/" + FILE); return r ? r.data.users || [] : []; },
-  async addUser() {
+  async users(folder) { this.useFolder(folder); const tk = await this.token(), d = dbx(); await d.checkFolder(tk); const r = await d.getJson(tk, d.basePath + "/" + FILE); return r ? r.data.users || [] : []; },
+  async addUser(folder) {
     const v = await P.ask("Novo usuário", [{ key: "nome", label: "Nome da pessoa", required: true }, { key: "u", label: "Usuário (login)", required: true, help: "Sem espaços. Ex.: maria" },
       { key: "email", label: "E-mail da conta Dropbox da pessoa", help: "Informe para enviar o convite da pasta e liberar o acesso dela. Pode deixar em branco se ela já tem acesso." },
       { key: "papel", label: "Papel", kind: "choice", options: ["Funcionário", "Dono"], help: "Funcionário usa o sistema; só o dono gerencia usuários, backup e configurações." }, { key: "pw", label: "Senha", kind: "password", required: true, help: "Mínimo de 6 caracteres. Passe a senha à pessoa; ela pode trocá-la depois." }], { papel: "Funcionário" }, { ok: "Adicionar" });
@@ -334,22 +338,58 @@ P.auth = {
     const nu = await mkUser(v.u.replace(/\s+/g, ""), v.nome, v.papel === "Dono" ? "dono" : "func", v.pw);
     const em = (v.email || "").trim().toLowerCase();
     if (em) nu.email = em;
-    await this.editUsers((a) => { if (a.users.some((x) => x.u === nu.u)) throw new Error("Já existe um usuário com esse login."); a.users.push(nu); });
+    await this.editUsers((a) => { if (a.users.some((x) => x.u === nu.u)) throw new Error("Já existe um usuário com esse login."); a.users.push(nu); }, folder);
     if (em) { try { await dbx().invite(await this.token(), em); } catch (e) { throw new Error("O usuário foi criado, mas o convite do Dropbox falhou: " + e.message + " Use “Convidar pelo Dropbox” para tentar de novo."); } }
     return true;
   },
-  async resetPw(u) {
+  async resetPw(u, folder) {
     const v = await P.ask("Nova senha de " + u.nome, [{ key: "pw", label: "Nova senha", kind: "password", required: true, help: "Mínimo de 6 caracteres." }], {}, { ok: "Trocar senha" });
     if (!v) return false;
     if (v.pw.length < 6) throw new Error("A senha precisa ter pelo menos 6 caracteres.");
     const salt = newSalt(), hash = await hashPw(v.pw, salt);
-    await this.editUsers((a) => { const x = a.users.find((y) => y.u === u.u); if (x) { x.salt = salt; x.hash = hash; } });
+    await this.editUsers((a) => { const x = a.users.find((y) => y.u === u.u); if (x) { x.salt = salt; x.hash = hash; } }, folder);
     return true;
   },
-  async removeUser(u) {
+  async removeUser(u, folder) {
     if (!(await P.confirm("Remover usuário", `Remover o acesso de ${u.nome} (${u.u})? Para bloquear também no Dropbox, remova a pessoa da pasta compartilhada.`, "Remover", true))) return false;
-    await this.editUsers((a) => { a.users = a.users.filter((x) => x.u !== u.u); });
+    await this.editUsers((a) => { a.users = a.users.filter((x) => x.u !== u.u); }, folder);
     return true;
+  },
+  async setRole(u, folder) {
+    const novo = u.papel === "dono" ? "func" : "dono";
+    if (!(await P.confirm("Mudar papel", `${u.nome} passará a ser ${novo === "dono" ? "Dono (gerencia usuários, backup e configurações)" : "Funcionário"}. Continuar?`, "Mudar"))) return false;
+    await this.editUsers((a) => { const x = a.users.find((y) => y.u === u.u); if (x) x.papel = novo; }, folder);
+    return true;
+  },
+  /** Bloqueia ou libera o acesso de todos os usuarios de uma empresa (ex.: falta de pagamento). */
+  async setSuspended(folder, on) {
+    await this.editUsers((a) => { a.suspensa = on; if (!on) delete a.suspensa; }, folder);
+  },
+  async setOwner(folder) {
+    const v = await P.ask("Definir o dono da empresa", [{ key: "nome", label: "Nome", required: true }, { key: "u", label: "Usuário (login)", required: true }, { key: "pw", label: "Senha", kind: "password", required: true, help: "Mínimo de 6 caracteres." }], {}, { ok: "Definir dono" });
+    if (!v) return false;
+    if (v.pw.length < 6) throw new Error("A senha precisa ter pelo menos 6 caracteres.");
+    const nu = await mkUser(v.u.replace(/\s+/g, ""), v.nome, "dono", v.pw);
+    await this.editUsers((a) => { if (a.users.some((x) => x.u === nu.u)) throw new Error("Já existe um usuário com esse login."); a.users.push(nu); }, folder);
+    return true;
+  },
+  /** Resumo de uma empresa para o painel: acesso, ultimo uso e tamanho da base. */
+  async companyInfo(folder) {
+    this.useFolder(folder);
+    const tk = await this.token(), d = dbx();
+    await d.checkFolder(tk);
+    const r = await d.getJson(tk, d.basePath + "/" + FILE);
+    const m = await d.rpc("files/get_metadata", tk, { path: d.basePath + "/precifica-dados.json" });
+    return { acc: r ? r.data : null, last: m.res.ok ? m.j.server_modified : "", size: m.res.ok ? m.j.size : 0 };
+  },
+  /** Baixa a base da empresa (arquivo de backup que o app restaura em Configuracoes). */
+  async companyBackup(folder) {
+    this.useFolder(folder);
+    const tk = await this.token(), d = dbx();
+    await d.checkFolder(tk);
+    const r = await d.getJson(tk, d.basePath + "/precifica-dados.json");
+    if (!r) throw new Error("Esta empresa ainda não tem dados na nuvem.");
+    return JSON.stringify({ app: "PrecificaWeb", version: 1, exported_at: new Date().toISOString(), data: r.data });
   },
   async changeOwnPw() {
     const v = await P.ask("Trocar minha senha", [{ key: "old", label: "Senha atual", kind: "password", required: true }, { key: "pw", label: "Nova senha", kind: "password", required: true, help: "Mínimo de 6 caracteres." }], {}, { ok: "Trocar senha" });
@@ -362,9 +402,10 @@ P.auth = {
     if (this.s.rem) { this.s.rem.k = hash; this.save(); }
     return true;
   },
-  async invite() {
+  async invite(folder) {
     const v = await P.ask("Convidar para a pasta do Dropbox", [{ key: "email", label: "E-mail da conta Dropbox da pessoa", required: true, help: "A pessoa recebe um convite do Dropbox e precisa aceitá-lo. Depois crie o usuário dela em “Adicionar usuário”." }], {}, { ok: "Enviar convite" });
     if (!v) return false;
+    this.useFolder(folder);
     await dbx().invite(await this.token(), v.email.trim());
     return true;
   },
@@ -448,6 +489,7 @@ P.auth = {
         let r;
         try { r = await this.login(sel.value, u.value, p.value, rem.checked); } catch (e) { this.busy = ""; throw e; }
         this.busy = "";
+        if (r.claim && this.policyOn() && !this.creatorEntry) throw new Error("Esta pasta ainda não tem usuários. Peça ao administrador do sistema para definir o dono.");
         if (r.claim) { this.claimFolder = sel.value; this.tab = "assumir"; return this.view(); }
         await this.activate();
       }) }, body));

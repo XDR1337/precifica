@@ -20,7 +20,7 @@ P.definePage("Administração", {
       let list = [];
       try { list = await dbx().listCompanies(await A.token()); } catch (e) { box.replaceChildren(h("p", { class: "fh", text: "Não foi possível listar: " + e.message })); return; }
       box.replaceChildren(...(list.length ? list.map((c) => h("div", { class: "auth-row" }, h("div", {}, h("b", { text: nice(c.name) }), h("span", { text: c.name + (c.pending ? " · convite novo" : "") })),
-        h("div", { class: "bar" }, btn("Abrir", () => A.enterAsAdmin(c.name), "primary xs"), btn("Excluir", () => excluir(c), "danger xs")))) : [h("p", { class: "fh", text: "Nenhuma empresa encontrada. Cada empresa precisa compartilhar a pasta “Precifica-…” com a sua conta do Dropbox." })]));
+        h("div", { class: "bar" }, btn("Gerenciar", () => gerenciar(c), "primary xs"), btn("Abrir", () => A.enterAsAdmin(c.name), "secondary xs"), btn("Excluir", () => excluir(c), "danger xs")))) : [h("p", { class: "fh", text: "Nenhuma empresa encontrada. Cada empresa precisa compartilhar a pasta “Precifica-…” com a sua conta do Dropbox." })]));
     };
     const excluir = async (c) => {
       const v = await P.ask("Excluir empresa", [{ key: "nome", label: `Digite o nome da pasta para confirmar: ${c.name}`, required: true, help: "Apaga a pasta e todos os dados desta empresa do Dropbox (o Dropbox guarda arquivos apagados por 30 dias). Se a pasta for de outra conta, o Dropbox pode apenas removê-la da sua lista." }], {}, { ok: "Excluir para sempre", danger: true });
@@ -32,6 +32,36 @@ P.definePage("Administração", {
         try { localStorage.removeItem(P.storeKey(slug)); localStorage.removeItem("precifica.acesso.v1." + slug); } catch (e) { /* ok */ }
         P.ui.toast("Empresa excluída"); drawCompanies();
       } catch (e) { err(e); }
+    };
+    const when = (t) => (t ? new Date(t).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—");
+    /** Janela de gerenciamento de uma empresa: usuarios, convites, suspensao, backup. */
+    const gerenciar = async (c) => {
+      const body = h("div", { class: "adm-rows" }, h("p", { class: "fh", text: "Carregando…" }));
+      const m = P.modal({ title: nice(c.name), sub: c.name, body, cls: "wide" });
+      const run = (fn) => async () => { try { if (await fn()) draw(); } catch (e) { err(e); } };
+      const draw = async () => {
+        let info;
+        try { info = await A.companyInfo(c.name); } catch (e) { body.replaceChildren(h("p", { class: "fh", text: "Não foi possível abrir: " + e.message })); return; }
+        const acc = info.acc, users = acc ? acc.users || [] : [];
+        const kv = (k, v) => h("div", {}, h("span", { class: "fh", text: k }), h("b", { text: v }));
+        const parts = [h("div", { class: "adm-kv" }, kv("Criada por", acc && acc.criador || "—"), kv("Criada em", acc ? when(acc.criado) : "—"), kv("Último uso", when(info.last)), kv("Tamanho", info.size ? Math.round(info.size / 1024) + " KB" : "—"), kv("Situação", !acc ? "Sem dono" : acc.suspensa ? "Suspensa" : "Ativa"))];
+        if (!acc || !users.length) {
+          parts.push(h("div", { class: "callout" }, h("p", { class: "msg", text: "Esta empresa ainda não tem usuários. Defina o dono para que alguém consiga entrar." })), h("div", { class: "bar" }, btn("Definir dono", run(() => A.setOwner(c.name)))));
+        } else {
+          parts.push(h("h4", { text: "Usuários" }), ...users.map((u) => h("div", { class: "auth-row" }, h("div", {}, h("b", { text: u.nome }), h("span", { text: `${u.u} · ${u.papel === "dono" ? "Dono" : "Funcionário"}${u.email ? " · " + u.email : ""}` })),
+            h("div", { class: "bar" }, btn("Nova senha", run(() => A.resetPw(u, c.name)), "secondary xs"), btn(u.papel === "dono" ? "Tornar funcionário" : "Tornar dono", run(() => A.setRole(u, c.name)), "secondary xs"), btn("Remover", run(() => A.removeUser(u, c.name)), "danger xs")))),
+            h("div", { class: "bar" }, btn("+ Usuário", run(() => A.addUser(c.name)), "secondary sm"), btn("Convidar e-mail", run(async () => { await A.invite(c.name); return false; }), "secondary sm")));
+        }
+        parts.push(h("h4", { text: "Ações" }), h("div", { class: "bar" },
+          btn("Abrir empresa", () => { m.close(); A.enterAsAdmin(c.name); }),
+          btn("Baixar backup", async () => { try { P.download(`precifica_${c.name}_${new Date().toISOString().slice(0, 10)}.json`, await A.companyBackup(c.name)); } catch (e) { err(e); } }, "secondary"),
+          acc ? btn(acc.suspensa ? "Reativar empresa" : "Suspender empresa", run(async () => {
+            if (!acc.suspensa && !(await P.confirm("Suspender empresa", "Ninguém desta empresa conseguirá entrar até você reativar (quem estiver dentro é desconectado em alguns minutos). Os dados não são apagados.", "Suspender", true))) return false;
+            await A.setSuspended(c.name, !acc.suspensa); return true;
+          }), acc.suspensa ? "primary" : "secondary") : null));
+        body.replaceChildren(...parts);
+      };
+      draw();
     };
     drawCompanies();
     out.push(card(cardTitle("Empresas", "Pastas “Precifica-…” que estão no seu Dropbox (compartilhadas com você)."), box,
