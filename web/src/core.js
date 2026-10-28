@@ -85,7 +85,7 @@ const CASCADES = {
   insumos: [["ficha_insumo", "insumo_id"]],
   propostas: [["proposta_itens", "proposta_id"]],
 };
-const STORE_KEY = "precifica.web.v1";
+P.storeKey = (slug) => "precifica.web.v1" + (slug ? "." + slug : "");   // um banco local por empresa
 P.newUid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 /** uid fixo para os dados que vem de fabrica (iguais em todos os aparelhos), para nao duplicarem na sincronizacao. */
 P.seedUid = (table, r) => {
@@ -102,8 +102,9 @@ class Database {
     this.state = null;
     this._timer = null;
     this.onChange = null;          // chamado a cada alteracao (a sincronizacao se agenda aqui)
+    this.key = P.storeKey(P.auth && P.auth.slug());
     let raw = null;
-    try { raw = localStorage.getItem(STORE_KEY); } catch (e) { this.persistent = false; }
+    try { raw = localStorage.getItem(this.key); } catch (e) { this.persistent = false; }
     if (raw) {
       try { this.state = JSON.parse(raw); } catch (e) { this.state = null; }
     }
@@ -139,7 +140,7 @@ class Database {
   _flush() {
     if (this._timer) { clearTimeout(this._timer); this._timer = null; }
     if (!this.persistent) return;
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(this.state)); }
+    try { localStorage.setItem(this.key, JSON.stringify(this.state)); }
     catch (e) { this.persistent = false; if (P.ui && P.ui.toast) P.ui.toast("Sem espaço para salvar neste aparelho. Faça um backup agora.", "danger", 6000); }
   }
   // ---- CRUD

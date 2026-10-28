@@ -306,7 +306,7 @@ P.definePage("Configurações", {
       btn("Escolher imagem", () => this.escolherLogo(pg), "secondary sm"), btn("Voltar ao logo da ACRS", () => { pg.db.setCfg("empresa_logo", ""); P.app.changed("Logotipo da ACRS restaurado"); }, "ghost sm"));
     const empresa = card(cardTitle("Sua empresa", "Aparece no cabeçalho das propostas e dos relatórios"), h("div", { class: "cfg-top" }, h("div", { class: "fg" }, this.EMPRESA.map(mk)), logoBox));
     const params = card(cardTitle("Parâmetros de preço e propostas"), h("div", { class: "fg c3" }, this.PARAMS.map(([k, l]) => mk([k, l, 1]))),
-      h("p", { class: "fh", text: "Hora extra e adicional noturno: percentuais somados ao custo da hora quando você escolhe “Hora extra”, “Adicional noturno” ou “Hora extra noturna” na mão de obra de um serviço (CLT: 50% e 20%). A hora extra noturna aplica os dois, um sobre o outro." }),
+      h("p", { class: "fh", text: "Hora extra e adicional noturno: percentuais somados ao custo da hora quando você escolhe “Hora extra”, “Adicional noturno” ou “Hora extra noturna” na mão de obra de um serviço (CLT: 50% e 20%). Os adicionais se somam (hora extra noturna = 50% + 20%; domingo/feriado noturno = 100% + 20%)." }),
       h("p", { class: "fh", text: "Os textos padrão das propostas (escopo, premissas, garantia…) ficam no próprio editor de proposta: menu “Modelos de texto…” › “Salvar estes textos como padrão”." }));
     const listas = card(cardTitle("Categorias e unidades personalizadas", "Itens criados por você (aparecem nas listas junto com os padrões e sincronizam com a equipe)."),
       ...Object.entries(P.LISTAS).map(([key, def]) => {
@@ -343,6 +343,12 @@ P.definePage("Configurações", {
         : [btn("Conectar ao Dropbox", () => { saveAdv(); sy.connect().catch((e) => P.info("Não foi possível conectar", e.message, "danger")); })]),
       h("p", { class: "fh", text: "Se aparecer erro ao conectar, a chave do app Dropbox pode estar errada: avise o administrador." }),
       h("p", { class: "fh", text: "Privacidade: o Dropbox vai informar que o app pode acessar arquivos. O app só lê e grava o arquivo precifica-dados.json na pasta compartilhada." }), adv);    const sobre = card(h("h3", { text: `${P.APP_NAME} ${P.APP_VERSION}` }), h("p", { class: "cs", text: `Desenvolvido pela ${P.APP_AUTHOR} (projeto de extensão PROEX – UniBrasil) como alternativa à Planilha de Precificação EG3 para quem não tem Microsoft Excel. Os cálculos seguem a planilha R02, com as correções apontadas no relatório final do projeto.` }));
+    if (P.auth.active) {                                 // modo empresa: login por usuario, pasta fixa da empresa
+      const sc = card(cardTitle("Sincronização (Dropbox)", "Mantém o celular, o computador e a equipe com os mesmos dados."), h("p", { class: "msg", text: stTxt }),
+        h("div", { class: "bar" }, btn("Sincronizar agora", () => sy.run({ interactive: true }).then(() => pg.rerender()).catch((e) => P.info("Sincronização", e.message, "danger")))));
+      const mine = P.auth.configCards(pg, card);
+      return P.auth.isOwner() ? [...mine, empresa, params, listas, enc, tut, sc, dados, sobre] : [...mine, tut, sobre];
+    }
     return [empresa, params, listas, enc, tut, syncCard, dados, sobre];
   },
   salvar() {

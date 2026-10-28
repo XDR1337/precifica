@@ -20,7 +20,12 @@ const TABBAR = [["Painel", "◆", "Painel"], ["Serviços e fichas", "▤", "Serv
 P.app = {
   ctx: {}, current: null, deferredInstall: null,
 
-  boot() {
+  /** Abertura: conclui o login do Dropbox (se voltamos dele), pede o login da empresa e so entao monta o app. */
+  async boot() {
+    const redirect = await P.sync.handleRedirect();
+    P.auth.enter(() => this.start(), redirect);
+  },
+  start() {
     this.db = new P.Database();
     this.engine = new P.Engine(this.db);
     this.tutorial = new P.Tutorial(this);
@@ -44,7 +49,8 @@ P.app = {
     if (sp) sp.remove();
     if (this.db.cfgNum("onboarding_ok") < 1) setTimeout(() => P.welcome(), 500);
     else if (this.db.cfgNum("tutorial_nao_mostrar") < 1) setTimeout(() => this.tutorial.start(), 700);
-    P.sync.handleRedirect().finally(() => P.sync.start());
+    if (P.auth.pendingName) { P.auth.initCompany(this.db); this.changed(); }
+    P.sync.start();
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
     if (!this.db.persistent) setTimeout(() => P.ui.toast("Este navegador não permite salvar dados. Faça backups para não perder o trabalho.", "warn", 7000), 1200);
   },
@@ -64,7 +70,7 @@ P.app = {
     this.companyLbl = h("b", { class: "company" });
     const side = h("aside", { class: "side", id: "side" },
       h("div", { class: "brand" }, h("div", { class: "logo-card" }, (this.sideLogo = h("img", { src: P.LOGO, alt: "Logotipo" }))), h("div", { class: "bt" }, h("b", { text: "Precifica" }), h("span", { text: "PRECIFICAÇÃO E PROPOSTAS" }))),
-      nav, h("div", { class: "sfoot" }, P.syncBadge(), this.companyLbl, h("span", { text: `v${P.APP_VERSION} · por ${P.APP_AUTHOR}` })));
+      nav, h("div", { class: "sfoot" }, P.syncBadge(), this.companyLbl, P.auth.shellUser(), h("span", { text: `v${P.APP_VERSION} · por ${P.APP_AUTHOR}` })));
     this.topTitle = h("span", { class: "tt" });
     const top = h("header", { class: "top" }, h("button", { type: "button", class: "burger", "aria-label": "Abrir menu", text: "☰", onClick: () => document.body.classList.toggle("nav-open") }), this.topTitle, h("span", { class: "grow" }), P.syncBadge());
     this.pageEl = h("main", { class: "page", id: "page" });

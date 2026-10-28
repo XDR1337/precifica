@@ -87,3 +87,10 @@ node web\test\import_test.js <pasta-com-node_modules\xlsx>
 node web\test\sync_test.js                           # junção entre dois aparelhos (sincronização)
 .venv\Scripts\python.exe web\test\print_test.py      # gera PDFs de teste pelo Edge/Chrome
 ```
+
+## Login por empresa (Dropbox)
+- Cada empresa tem a pasta `Precifica-<nome>` no Dropbox, com `precifica-dados.json` (dados) e `precifica-acesso.json` (usuarios; senhas guardadas como hash).
+- Tela inicial: conectar o Dropbox, depois **Entrar** (empresa, usuario, senha, "lembrar") ou **Criar empresa** (a pessoa vira o dono).
+- Dono: em Configuracoes > Usuarios da empresa cria/remove funcionarios, troca senhas e convida pelo Dropbox. Funcionario nao ve configuracoes, backup nem usuarios.
+- Administrador: conta Dropbox cujo ID esta na variavel `ADMIN_DROPBOX_IDS` (GitHub > Settings > Variables; ou `web/admin_ids.txt`). Ve as empresas que compartilharam a pasta com ele e abre qualquer uma com um clique. `SUPPORT_EMAIL` (opcional) mostra aos donos o botao "Compartilhar com o suporte".
+- Limite: sem servidor proprio, a senha do app e uma trava de uso; a protecao real dos dados e a permissao da pasta no Dropbox.

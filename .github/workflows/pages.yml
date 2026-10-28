@@ -33,6 +33,8 @@ jobs:
           # Configure em: Settings > Secrets and variables > Actions > Variables
           PRECIFICA_DROPBOX_KEY: ${{ vars.DROPBOX_APP_KEY }}
           PRECIFICA_DROPBOX_FOLDER: ${{ vars.DROPBOX_FOLDER }}
+          PRECIFICA_ADMIN_IDS: ${{ vars.ADMIN_DROPBOX_IDS }}
+          PRECIFICA_SUPPORT_EMAIL: ${{ vars.SUPPORT_EMAIL }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

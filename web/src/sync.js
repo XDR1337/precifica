@@ -19,7 +19,7 @@ const dropbox = {
   id: "dropbox", name: "Dropbox",
   key() { return (P.sync.s.dropboxKey || P.SYNC_DROPBOX_KEY || "").trim(); },
   /** Pasta compartilhada no Dropbox (ex.: "Precifica-Equipe"). Vazia = raiz da pasta do app (app tipo "App folder"). */
-  folder() { return (P.sync.s.dropboxFolder !== undefined ? P.sync.s.dropboxFolder : (P.SYNC_DROPBOX_FOLDER || "")).trim().replace(/^\/+|\/+$/g, ""); },
+  folder() { if (this.forced) return this.forced; return (P.sync.s.dropboxFolder !== undefined ? P.sync.s.dropboxFolder : (P.SYNC_DROPBOX_FOLDER || "")).trim().replace(/^\/+|\/+$/g, ""); },
   filePath() { return (this.folder() ? (this.basePath || "/" + this.folder()) : "") + "/" + FILE_NAME; },
   redirectUri() { return location.origin + location.pathname; },
   configured() { return !!this.key(); },
@@ -29,7 +29,7 @@ const dropbox = {
     const verifier = b64url(rnd), state = b64url(crypto.getRandomValues(new Uint8Array(16)));
     const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
     try { localStorage.setItem(PKCE_KEY, JSON.stringify({ verifier, state, redirect: this.redirectUri() })); } catch (e) { throw new Error("Não foi possível iniciar o login (armazenamento bloqueado)."); }
-    const q = new URLSearchParams({ client_id: this.key(), scope: "files.content.read files.content.write" + (this.folder() ? " files.metadata.read sharing.read sharing.write" : ""), response_type: "code", code_challenge: challenge, code_challenge_method: "S256", token_access_type: "offline", redirect_uri: this.redirectUri(), state,
+    const q = new URLSearchParams({ client_id: this.key(), scope: "files.content.read files.content.write files.metadata.read sharing.read sharing.write", response_type: "code", code_challenge: challenge, code_challenge_method: "S256", token_access_type: "offline", redirect_uri: this.redirectUri(), state,
       force_reauthentication: "true", force_reapprove: "true" });   // sempre pede login/conta e a permissao de novo (nao reaproveita a sessao do navegador)
     location.href = "https://www.dropbox.com/oauth2/authorize?" + q;
     await new Promise(() => {});                       // a pagina vai ser trocada
@@ -44,7 +44,7 @@ const dropbox = {
   async finish() {
     const q = new URLSearchParams(location.search);
     if (!q.has("code") && !q.has("error")) return null;
-    const clean = () => { try { history.replaceState(null, "", location.pathname + "#/Configurações"); } catch (e) { /* ok */ } };
+    const clean = () => { try { history.replaceState(null, "", location.pathname); } catch (e) { /* ok */ } };
     let pk = null;
     try { pk = JSON.parse(localStorage.getItem(PKCE_KEY) || "null"); localStorage.removeItem(PKCE_KEY); } catch (e) { /* ok */ }
     const err = q.get("error_description") || q.get("error"), code = q.get("code"), state = q.get("state");
@@ -52,7 +52,7 @@ const dropbox = {
     if (err) throw new Error(q.get("error") === "access_denied" ? "Você não autorizou o acesso ao Dropbox." : err);
     if (!pk || pk.state !== state) throw new Error("O login do Dropbox não pôde ser confirmado. Tente conectar de novo." + KEY_HINT);
     const j = await this.tokenCall({ grant_type: "authorization_code", code, code_verifier: pk.verifier, redirect_uri: pk.redirect });
-    P.sync.s.refresh = j.refresh_token; P.sync.s.connected = true; P.sync.s.provider = "dropbox";
+    P.sync.s.refresh = j.refresh_token; P.sync.s.account = j.account_id || ""; P.sync.s.connected = true; P.sync.s.provider = "dropbox";
     P.sync.setToken(j.access_token, j.expires_in);
     P.sync.save();
     return true;
@@ -134,7 +134,62 @@ const dropbox = {
     const res = await this.call("https://content.dropboxapi.com/2/files/upload", token, { path: this.filePath(), mode, autorename: false, mute: true }, JSON.stringify(data), "application/octet-stream");
     if (res.status === 409) { const e = new Error("conflito"); e.conflict = true; throw e; }
     if (!res.ok) throw this.friendly(res, await res.text());
-  },  async revoke(token) { try { await fetch("https://api.dropboxapi.com/2/auth/token/revoke", { method: "POST", headers: { Authorization: "Bearer " + token } }); } catch (e) { /* ok */ } },
+  },  // ---- arquivos e pastas das empresas (login multiempresa, ver auth.js)
+  async listCompanies(token) {
+    const out = new Map();
+    const add = (n, pending) => { if (/^precifica-/i.test(n || "") && !out.has(n.toLowerCase())) out.set(n.toLowerCase(), { name: n, pending: !!pending }); };
+    let r = await this.rpc("files/list_folder", token, { path: "", limit: 500 });
+    if (!r.res.ok) throw this.friendly(r.res, r.text);
+    for (;;) {
+      (r.j.entries || []).filter((e) => e[".tag"] === "folder").forEach((e) => add(e.name));
+      if (!r.j.has_more) break;
+      r = await this.rpc("files/list_folder/continue", token, { cursor: r.j.cursor });
+      if (!r.res.ok) break;
+    }
+    const m = await this.rpc("sharing/list_mountable_folders", token, {});
+    if (m.res.ok) (m.j.entries || []).forEach((e) => add(e.name, true));
+    return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
+  },
+  async getJson(token, path) {
+    const res = await this.call("https://content.dropboxapi.com/2/files/download", token, { path });
+    if (res.status === 409) return null;
+    if (!res.ok) throw this.friendly(res, await res.text());
+    let rev = null; try { rev = JSON.parse(res.headers.get("dropbox-api-result")).rev || null; } catch (e) { /* ok */ }
+    return { data: JSON.parse(await res.text()), rev };
+  },
+  async putJson(token, path, data, rev) {
+    const mode = rev ? { ".tag": "update", update: rev } : { ".tag": "add" };
+    const res = await this.call("https://content.dropboxapi.com/2/files/upload", token, { path, mode, autorename: false, mute: true }, JSON.stringify(data), "application/octet-stream");
+    if (res.status === 409) { const e = new Error("conflito"); e.conflict = true; throw e; }
+    if (!res.ok) throw this.friendly(res, await res.text());
+  },
+  async createFolder(token, name) {
+    const r = await this.rpc("files/create_folder_v2", token, { path: "/" + name, autorename: false });
+    if (!r.res.ok) { if (/conflict/.test(r.text)) throw new Error("Já existe uma pasta com esse nome no seu Dropbox. Escolha outro nome para a empresa."); throw this.friendly(r.res, r.text); }
+    this.basePath = "/" + name; this.folderOk = name;
+  },
+  /** Convida uma pessoa (e-mail do Dropbox) para a pasta da empresa, como editora. */
+  async invite(token, email) {
+    await this.checkFolder(token);
+    let id = null;
+    const meta = await this.rpc("files/get_metadata", token, { path: this.basePath });
+    if (meta.res.ok && meta.j.sharing_info && meta.j.sharing_info.shared_folder_id) id = meta.j.sharing_info.shared_folder_id;
+    if (!id) {
+      const sh = await this.rpc("sharing/share_folder", token, { path: this.basePath, acl_update_policy: "editors", member_policy: "anyone", force_async: false });
+      if (!sh.res.ok) throw this.friendly(sh.res, sh.text);
+      id = sh.j.shared_folder_id || null;
+      for (let k = 0; !id && sh.j.async_job_id && k < 10; k++) {
+        await new Promise((r) => setTimeout(r, 800));
+        const st = await this.rpc("sharing/check_share_job_status", token, { async_job_id: sh.j.async_job_id });
+        if (st.j && st.j[".tag"] === "complete") id = st.j.shared_folder_id;
+        else if (st.j && st.j[".tag"] === "failed") throw new Error("O Dropbox não conseguiu compartilhar a pasta.");
+      }
+    }
+    if (!id) throw new Error("Não foi possível compartilhar a pasta agora. Tente de novo.");
+    const r = await this.rpc("sharing/add_folder_member", token, { shared_folder_id: id, quiet: false, members: [{ member: { ".tag": "email", email }, access_level: { ".tag": "editor" } }] });
+    if (!r.res.ok) throw this.friendly(r.res, r.text);
+  },
+  async revoke(token) { try { await fetch("https://api.dropboxapi.com/2/auth/token/revoke", { method: "POST", headers: { Authorization: "Bearer " + token } }); } catch (e) { /* ok */ } },
 };
 
 // ====================================================================== Google Drive (nao exposto na interface)
@@ -221,16 +276,9 @@ P.sync = {
     await p.token(true); this.s.connected = true; this.save();
     await this.run({ interactive: true });
   },
-  /** Ao abrir o app: conclui o login do Dropbox se estivermos voltando dele. */
+  /** Ao abrir o app: conclui o login do Dropbox se estivermos voltando dele. Devolve "ok", "" (nao era retorno) ou o texto do erro. */
   async handleRedirect() {
-    try {
-      const done = await dropbox.finish();
-      if (!done) return;
-      P.app.show("Configurações", { push: false });
-      P.ui.toast("Dropbox conectado", "ok");
-      await this.run({ interactive: true });
-      P.app.draw(P.app.pageCtx("Configurações"));
-    } catch (e) { P.app.show("Configurações", { push: false }); P.info("Não foi possível conectar ao Dropbox", e.message, "danger"); }
+    try { return (await dropbox.finish()) ? "ok" : ""; } catch (e) { return e.message || "Não foi possível conectar ao Dropbox."; }
   },
   disconnect() {
     const t = this.cachedToken(), p = this.provider;
@@ -267,6 +315,7 @@ P.sync = {
         }
         break;
       }      db.state.replace = false; db._flush();
+      if (P.auth && P.auth.active) { try { await P.auth.revalidate(); } catch (e) { /* so confere quando da */ } }
       this.s.last = Date.now(); this.save();
       this.set("idle");
       if (changedLocal) { this.mute = true; try { P.app.changed(); } finally { this.mute = false; } P.ui.toast("Dados atualizados pela nuvem", "info"); }

@@ -138,7 +138,7 @@ P.inp = function (f, value) {
     el = h("textarea", { class: "in", rows: Math.max(2, Math.round((f.height || 80) / 22)), value: value || "" });
   } else {
     const numeric = ["num", "money", "pct", "int"].includes(kind);
-    el = h("input", { class: "in", type: "text", autocomplete: "off", inputmode: numeric ? "decimal" : (f.mode || "text"), placeholder: f.placeholder || null,
+    el = h("input", { class: "in", type: kind === "password" ? "password" : "text", autocomplete: kind === "password" ? "new-password" : "off", inputmode: numeric ? "decimal" : (f.mode || "text"), placeholder: f.placeholder || null,
       value: value !== null && value !== undefined && value !== "" ? (numeric ? numInput(value, 4) : String(value)) : "" });
     if (kind === "int") el.setAttribute("inputmode", "numeric");
   }

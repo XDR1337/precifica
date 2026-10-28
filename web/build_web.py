@@ -25,7 +25,7 @@ from precifica.assets import ACRS_LOGO_PNG       # noqa: E402
 from precifica.core import APP_AUTHOR, APP_VERSION  # noqa: E402
 
 SRC = os.path.join(HERE, "src")
-JS_ORDER = ["core.js", "ui-base.js", "docs.js", "signature.js", "pages-a.js", "pages-b.js", "proposal.js", "tutorial.js", "importer.js", "sync.js", "app.js"]
+JS_ORDER = ["core.js", "ui-base.js", "docs.js", "signature.js", "pages-a.js", "pages-b.js", "proposal.js", "tutorial.js", "importer.js", "sync.js", "auth.js", "app.js"]
 APP_NAME = "Precifica"
 
 
@@ -47,6 +47,14 @@ def dropbox_folder() -> str:
     return os.environ.get("PRECIFICA_DROPBOX_FOLDER", "").strip()
 
 
+def _cfg(fname: str, env: str) -> str:
+    p = os.path.join(HERE, fname)
+    if os.path.exists(p):
+        with open(p, encoding="utf-8") as f:
+            return f.read().strip()
+    return os.environ.get(env, "").strip()
+
+
 def seed_js() -> str:
     data = {
         "UNIDADES": seed.UNIDADES, "SETORES": seed.SETORES, "CONTRATACOES": seed.CONTRATACOES, "STATUS_PROPOSTA": seed.STATUS_PROPOSTA,
@@ -60,6 +68,8 @@ def seed_js() -> str:
             f"P.LOGO = {json.dumps(logo)};\n"
             f"P.SYNC_DROPBOX_KEY = {json.dumps(dropbox_key())};\n"
             f"P.SYNC_DROPBOX_FOLDER = {json.dumps(dropbox_folder())};\n"
+            f"P.ADMIN_IDS = {json.dumps([x.strip() for x in _cfg('admin_ids.txt', 'PRECIFICA_ADMIN_IDS').replace(chr(10), ',').split(',') if x.strip()])};\n"
+            f"P.SUPPORT_EMAIL = {json.dumps(_cfg('support_email.txt', 'PRECIFICA_SUPPORT_EMAIL'))};\n"
             f"P.APP_NAME = {json.dumps(APP_NAME)}; P.APP_VERSION = {json.dumps(APP_VERSION)}; P.APP_AUTHOR = {json.dumps(APP_AUTHOR)};\n")
 
 
