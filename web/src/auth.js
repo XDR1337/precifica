@@ -153,6 +153,20 @@ P.auth = {
     try { const tk = await this.token(), r = await dbx().getJson(tk, ADMIN_PATH); if (r) wr(ADMIN, r.data); return r ? r.data : null; }
     catch (e) { const c = rd(ADMIN); if (c && !navigator.onLine) return c; throw e; }
   },
+  /** Troca a senha do administrador (confere a atual antes). */
+  async changeAdminPw() {
+    const v = await P.ask("Trocar senha do administrador", [{ key: "old", label: "Senha atual", kind: "password", required: true }, { key: "pw", label: "Nova senha", kind: "password", required: true, help: "Mínimo de 6 caracteres." }], {}, { ok: "Trocar senha" });
+    if (!v) return false;
+    if (v.pw.length < 6) throw new Error("A senha precisa ter pelo menos 6 caracteres.");
+    const tk = await this.token(), d = dbx(), r = await d.getJson(tk, ADMIN_PATH);
+    if (!r || (await hashPw(v.old, r.data.salt)) !== r.data.hash) throw new Error("A senha atual está incorreta.");
+    const salt = newSalt(), acc = { ...r.data, salt, hash: await hashPw(v.pw, salt) };
+    await d.putJson(tk, ADMIN_PATH, acc, r.rev);
+    wr(ADMIN, acc);
+    this.me.k = acc.hash; wr(SES, this.me, sessionStorage);
+    if (this.s.adminRem) { this.s.adminRem = { k: acc.hash }; this.save(); }
+    return true;
+  },
   async adminLogin(user, pw, remember, create) {
     if (!this.adminAllowed()) throw new Error("Esta conta do Dropbox não está autorizada como administradora.");
     let acc = await this.readAdmin();
@@ -368,7 +382,7 @@ P.auth = {
     if (this.err) card.append(h("div", { class: "callout danger" }, h("p", { class: "msg", text: this.err })));
     card.append(list.length ? h("div", { class: "auth-list" }, list.map((c) => h("div", { class: "auth-row" }, h("div", {}, h("b", { text: c.name.replace(/^precifica-/i, "").replace(/-/g, " ") }), h("span", { text: c.name + (c.pending ? " · convite novo" : "") })),
       btn("Abrir", async () => { try { this.setBusy("Carregando " + c.name + "…"); await this.enterAsAdmin(c.name); } catch (e) { this.busy = ""; this.notice = e.message; this.view(); } }, "primary sm")))) : h("p", { class: "fh", text: "Nenhuma empresa encontrada. Cada empresa precisa compartilhar a pasta “Precifica-…” com esta conta do Dropbox." }));
-    card.append(h("div", { class: "auth-actions" }, btn("Atualizar lista", () => { this.companies = null; this.loadCompanies(); }, "secondary sm"), btn("Sair do administrador", () => this.leave(true), "ghost sm")), this.footer());
+    card.append(h("div", { class: "auth-actions" }, btn("Trocar senha", async () => { try { if (await this.changeAdminPw()) P.ui.toast("Senha alterada"); } catch (e) { P.info("Não foi possível trocar", e.message, "danger"); } }, "secondary sm"), btn("Atualizar lista", () => { this.companies = null; this.loadCompanies(); }, "secondary sm"), btn("Sair do administrador", () => this.leave(true), "ghost sm")), this.footer());
   },
   footer() {
     const id = P.sync.s.account || "";
@@ -389,7 +403,7 @@ P.auth = {
     const out = [];
     const guard = (fn) => async () => { try { if (await fn()) pg.rerender(); } catch (e) { P.info("Não foi possível concluir", e.message, "danger"); } };
     out.push(card(h("h3", { text: "Minha conta" }), h("p", { class: "cs", text: `${this.me.nome} · ${this.roleLabel()} · ${this.s.empresa || ""}` }),
-      h("div", { class: "bar" }, this.isAdmin() ? null : btn("Trocar minha senha", guard(() => this.changeOwnPw()), "secondary"), this.isAdmin() ? btn("Trocar de empresa", () => this.switchCompany(), "secondary") : null, btn(this.isAdmin() ? "Sair do administrador" : "Sair", () => this.leave(true), "secondary"))));
+      h("div", { class: "bar" }, this.isAdmin() ? null : btn("Trocar minha senha", guard(() => this.changeOwnPw()), "secondary"), this.isAdmin() ? btn("Trocar senha do administrador", async () => { try { if (await this.changeAdminPw()) P.ui.toast("Senha alterada"); } catch (e) { P.info("Não foi possível trocar", e.message, "danger"); } }, "secondary") : null, this.isAdmin() ? btn("Trocar de empresa", () => this.switchCompany(), "secondary") : null, btn(this.isAdmin() ? "Sair do administrador" : "Sair", () => this.leave(true), "secondary"))));
     if (this.isOwner()) {
       const box = h("div", { class: "ulist" }, h("p", { class: "fh", text: "Carregando…" }));
       const draw = async () => {
