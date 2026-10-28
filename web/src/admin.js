@@ -42,15 +42,15 @@ P.definePage("Administração", {
       const draw = async () => {
         let info;
         try { info = await A.companyInfo(c.name); } catch (e) { body.replaceChildren(h("p", { class: "fh", text: "Não foi possível abrir: " + e.message })); return; }
-        const acc = info.acc, users = acc ? acc.users || [] : [];
+        const acc = info.acc, members = acc && Array.isArray(acc.members) ? acc.members : [];
         const kv = (k, v) => h("div", {}, h("span", { class: "fh", text: k }), h("b", { text: v }));
-        const parts = [h("div", { class: "adm-kv" }, kv("Criada por", acc && acc.criador || "—"), kv("Criada em", acc ? when(acc.criado) : "—"), kv("Último uso", when(info.last)), kv("Tamanho", info.size ? Math.round(info.size / 1024) + " KB" : "—"), kv("Situação", !acc ? "Sem dono" : acc.suspensa ? "Suspensa" : "Ativa"))];
-        if (!acc || !users.length) {
-          parts.push(h("div", { class: "callout" }, h("p", { class: "msg", text: "Esta empresa ainda não tem usuários. Defina o dono para que alguém consiga entrar." })), h("div", { class: "bar" }, btn("Definir dono", run(() => A.setOwner(c.name)))));
+        const parts = [h("div", { class: "adm-kv" }, kv("Criada por", acc && acc.criador || "—"), kv("Criada em", acc ? when(acc.criado) : "—"), kv("Último uso", when(info.last)), kv("Tamanho", info.size ? Math.round(info.size / 1024) + " KB" : "—"), kv("Situação", !members.length ? "Sem dono" : acc.suspensa ? "Suspensa" : "Ativa"))];
+        if (!members.length) {
+          parts.push(h("div", { class: "callout" }, h("p", { class: "msg", text: "Esta empresa ainda não tem dono. Informe o e-mail do dono para que ele consiga entrar." })), h("div", { class: "bar" }, btn("Definir dono", run(() => A.setOwner(c.name)))));
         } else {
-          parts.push(h("h4", { text: "Usuários" }), ...users.map((u) => h("div", { class: "auth-row" }, h("div", {}, h("b", { text: u.nome }), h("span", { text: `${u.u} · ${u.papel === "dono" ? "Dono" : "Funcionário"}${u.email ? " · " + u.email : ""}` })),
-            h("div", { class: "bar" }, btn("Nova senha", run(() => A.resetPw(u, c.name)), "secondary xs"), btn(u.papel === "dono" ? "Tornar funcionário" : "Tornar dono", run(() => A.setRole(u, c.name)), "secondary xs"), btn("Remover", run(() => A.removeUser(u, c.name)), "danger xs")))),
-            h("div", { class: "bar" }, btn("+ Usuário", run(() => A.addUser(c.name)), "secondary sm"), btn("Convidar e-mail", run(async () => { await A.invite(c.name); return false; }), "secondary sm")));
+          parts.push(h("h4", { text: "Pessoas com acesso" }), ...members.map((u) => h("div", { class: "auth-row" }, h("div", {}, h("b", { text: u.email }), h("span", { text: u.papel === "dono" ? "Dono" : "Funcionário" })),
+            h("div", { class: "bar" }, btn(u.papel === "dono" ? "Tornar funcionário" : "Tornar dono", run(() => A.setRole(u, c.name)), "secondary xs"), btn("Reenviar convite", run(async () => { await A.resendInvite(u, c.name); P.ui.toast("Convite enviado"); return false; }), "secondary xs"), btn("Remover", run(() => A.removeMember(u, c.name)), "danger xs")))),
+            h("div", { class: "bar" }, btn("+ Adicionar pessoa", run(() => A.addMember(c.name)), "secondary sm")));
         }
         parts.push(h("h4", { text: "Ações" }), h("div", { class: "bar" },
           btn("Abrir empresa", () => { m.close(); A.enterAsAdmin(c.name); }),
@@ -77,23 +77,25 @@ P.definePage("Administração", {
       try { pol = await A.policyRead(); } catch (e) { rulesBox.replaceChildren(h("p", { class: "fh", text: "Não foi possível carregar as regras: " + e.message })); return; }
       pol.criadores = pol.criadores || [];
       fTeste.el.value = String(pol.teste_s || 30); fBloq.el.value = String(pol.bloqueio_h || 5);
-      rulesBox.replaceChildren(...(pol.criadores.length ? pol.criadores.map((c) => h("div", { class: "auth-row" }, h("div", {}, h("b", { text: c.email }), h("span", { text: `Pode criar ${c.limite === 0 ? "ilimitadas" : c.limite} empresa${c.limite === 1 ? "" : "s"}` })),
+      rulesBox.replaceChildren(...(pol.criadores.length ? pol.criadores.map((c) => h("div", { class: "auth-row" }, h("div", {}, h("b", { text: c.email }), h("span", { text: `Empresas: ${c.limite === 0 ? "sem limite" : c.limite} · Pessoas convidadas: ${c.limite_func === 0 ? "sem limite" : (c.limite_func === undefined ? 5 : c.limite_func)}` })),
         h("div", { class: "bar" }, btn("Limite", async () => {
-          const v = await P.ask("Limite de empresas", [{ key: "limite", label: "Quantas empresas este e-mail pode criar?", kind: "int", required: true, min: 0, help: "0 = sem limite." }], { limite: c.limite }, { ok: "Salvar" });
-          if (v) { c.limite = Math.max(0, v.limite); save("Limite atualizado"); }
+          const v = await P.ask("Limites de " + c.email, [{ key: "limite", label: "Quantas empresas pode criar?", kind: "int", required: true, min: 0, help: "0 = sem limite." },
+            { key: "limite_func", label: "Quantas pessoas pode convidar?", kind: "int", required: true, min: 0, help: "Vale para todas as empresas criadas por este e-mail somadas. 0 = sem limite." }], { limite: c.limite, limite_func: c.limite_func === undefined ? 5 : c.limite_func }, { ok: "Salvar" });
+          if (v) { c.limite = Math.max(0, v.limite); c.limite_func = Math.max(0, v.limite_func); save("Limites atualizados"); }
         }, "secondary xs"), btn("Remover", async () => {
           if (await P.confirm("Remover e-mail", `Remover ${c.email}? Ele não poderá mais criar empresas (as que já existem continuam).`, "Remover", true)) { pol.criadores = pol.criadores.filter((x) => x !== c); save("E-mail removido"); }
         }, "danger xs")))) : [h("p", { class: "fh", text: "Nenhum e-mail liberado ainda. Sem a lista, ninguém consegue criar empresas." })]));
     };
     drawRules();
-    out.push(card(cardTitle("Quem pode criar empresas", "Só os e-mails desta lista criam empresas novas. Quem entra pelo convite de um dono usa a empresa dele sem precisar estar aqui."), rulesBox,
+    out.push(card(cardTitle("Quem pode criar empresas", "Só os e-mails desta lista criam empresas novas, cada um com o seu limite de empresas e de pessoas convidadas. Quem entra pelo convite de um dono usa a empresa dele sem precisar estar aqui."), rulesBox,
       h("div", { class: "bar" }, btn("+ Liberar e-mail", async () => {
-        const v = await P.ask("Liberar e-mail", [{ key: "email", label: "E-mail da conta Dropbox", required: true, mode: "email" }, { key: "limite", label: "Quantas empresas pode criar", kind: "int", min: 0, help: "0 = sem limite." }], { limite: 1 }, { ok: "Liberar" });
+        const v = await P.ask("Liberar e-mail", [{ key: "email", label: "E-mail da conta Dropbox", required: true, mode: "email" }, { key: "limite", label: "Quantas empresas pode criar", kind: "int", min: 0, help: "0 = sem limite." },
+          { key: "limite_func", label: "Quantas pessoas pode convidar", kind: "int", min: 0, help: "Somando todas as empresas dele. 0 = sem limite." }], { limite: 1, limite_func: 5 }, { ok: "Liberar" });
         if (!v) return;
         const em = v.email.trim().toLowerCase();
         if (!/^\S+@\S+\.\S+$/.test(em)) return P.info("E-mail inválido", "Confira o e-mail digitado.", "warn");
         if (pol.criadores.some((c) => c.email === em)) return P.info("Já está na lista", "Use “Limite” para mudar o limite dele.", "warn");
-        pol.criadores.push({ email: em, limite: Math.max(0, v.limite) }); save("E-mail liberado");
+        pol.criadores.push({ email: em, limite: Math.max(0, v.limite), limite_func: Math.max(0, v.limite_func) }); save("E-mail liberado");
       }))));
 
     out.push(card(cardTitle("Modo offline de teste", "Quem entra sem e-mail liberado e sem convite pode usar o modo offline por alguns segundos; depois o aparelho fica bloqueado."),
