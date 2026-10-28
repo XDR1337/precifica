@@ -416,8 +416,9 @@ class Engine {
   folhaTotal(setor = null) { return this.equipeCalc().filter((c) => setor === null || c.setor === setor).reduce((a, c) => a + c.total, 0); }
   /** Multiplicador do custo-hora: hora extra e adicional noturno vem das Configuracoes (padrao CLT: 50% e 20%). */
   multHora(tipo) {
-    const he = this.c("adicional_hora_extra_pct", 50) / 100, an = this.c("adicional_noturno_pct", 20) / 100;
-    return tipo === "extra" ? 1 + he : tipo === "noturna" ? 1 + an : tipo === "extra_noturna" ? (1 + he) * (1 + an) : 1;
+    const he = this.c("adicional_hora_extra_pct", 50) / 100, an = this.c("adicional_noturno_pct", 20) / 100, fe = this.c("adicional_feriado_pct", 100) / 100;
+    // os adicionais somam entre si: feriado a noite = 1 + 100% + 20%
+    return { extra: 1 + he, noturna: 1 + an, extra_noturna: 1 + he + an, feriado: 1 + fe, feriado_noturna: 1 + fe + an }[tipo] || 1;
   }
   // ---- capacidade produtiva
   produtividade() { return Math.max(0.01, this.c("produtividade_pct", 75) / 100); }
@@ -701,9 +702,9 @@ P.modeloTextos = function (cfg) {
 };
 
 // ------------------------------------------------------------------ tipos de hora e listas personalizaveis
-P.TIPOS_HORA = [["normal", "Hora normal"], ["extra", "Hora extra"], ["noturna", "Adicional noturno"], ["extra_noturna", "Hora extra noturna"]];
+P.TIPOS_HORA = [["normal", "Hora normal"], ["extra", "Hora extra"], ["noturna", "Adicional noturno"], ["extra_noturna", "Hora extra noturna"], ["feriado", "Domingo / feriado"], ["feriado_noturna", "Domingo / feriado noturno"]];
 P.tipoHoraLabel = (k) => (P.TIPOS_HORA.find((t) => t[0] === k) || P.TIPOS_HORA[0])[1];
-P.CFG_DEFAULTS = { adicional_hora_extra_pct: 50, adicional_noturno_pct: 20 };
+P.CFG_DEFAULTS = { adicional_hora_extra_pct: 50, adicional_noturno_pct: 20, adicional_feriado_pct: 100 };
 P.LISTAS = {
   unidades: { label: "Unidades de medida (insumos e revenda)", item: "unidade de medida", base: () => P.SEED.UNIDADES },
   categorias: { label: "Categorias de insumos", item: "categoria", base: () => ["Material", "Mão de obra terceirizada", "Deslocamento", "Referência de mercado", "Outros"] },

@@ -193,11 +193,11 @@ P.definePage("Serviços e fichas", {
   },
   /** Campos "horas" + "tipo de hora" (normal, extra, noturna). Os percentuais vem das Configuracoes. */
   modFields(e, nome) {
-    const he = num(e.c("adicional_hora_extra_pct", 50), 0), an = num(e.c("adicional_noturno_pct", 20), 0);
-    const labels = { normal: "Hora normal", extra: `Hora extra (+${he}%)`, noturna: `Adicional noturno (+${an}%)`, extra_noturna: `Hora extra noturna (+${he}% e +${an}%)` };
+    const he = num(e.c("adicional_hora_extra_pct", 50), 0), an = num(e.c("adicional_noturno_pct", 20), 0), fe = num(e.c("adicional_feriado_pct", 100), 0);
+    const labels = { normal: "Hora normal", extra: `Hora extra (+${he}%)`, noturna: `Adicional noturno (+${an}%)`, extra_noturna: `Hora extra noturna (+${he + an}%)`, feriado: `Domingo / feriado (+${fe}%)`, feriado_noturna: `Domingo / feriado noturno (+${fe + an}%)` };
     return { labels, key: (txt) => Object.keys(labels).find((k) => labels[k] === txt) || "normal", fields: [
       { key: "horas", label: `Horas de ${nome} neste serviço`, kind: "num", required: true, min: 0, help: "Ex.: 1,5 = uma hora e meia" },
-      { key: "tipo", label: "Tipo de hora", kind: "choice", options: Object.values(labels), help: "Hora extra e adicional noturno aumentam o custo da hora. Os percentuais ficam em Configurações." }] };
+      { key: "tipo", label: "Tipo de hora", kind: "choice", options: Object.values(labels), help: "Hora extra, feriado e adicional noturno aumentam o custo da hora (os adicionais se somam). Os percentuais ficam em Configurações." }] };
   },
   async editMod(pg, r) {
     const mf = this.modFields(pg.eng, r.nome);

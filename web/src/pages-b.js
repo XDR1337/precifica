@@ -284,7 +284,7 @@ P.definePage("Configurações", {
     ["empresa_endereco", "Endereço", 2], ["empresa_bairro", "Bairro", 1], ["empresa_cidade", "Cidade", 1], ["empresa_uf", "UF", 1], ["empresa_cep", "CEP", 1], ["empresa_sigla", "Nome curto nos textos (ex.: ACRS)", 1],
     ["empresa_site", "Site / Instagram", 1], ["proposta_assinante_empresa", "Assinante da empresa nas propostas (nome e função)", 2]],
   PARAMS: [["lucro_desejado_pct", "Lucro desejado padrão (%)"], ["proposta_proximo_numero", "Próximo nº de proposta"], ["proposta_validade_dias", "Validade das propostas (dias)"],
-    ["adicional_hora_extra_pct", "Adicional de hora extra (%)"], ["adicional_noturno_pct", "Adicional noturno (%)"]],
+    ["adicional_hora_extra_pct", "Adicional de hora extra (%)"], ["adicional_noturno_pct", "Adicional noturno (%)"], ["adicional_feriado_pct", "Adicional de domingo / feriado (%)"]],
   ENC: [["enc_ferias", "Férias + 1/3 (%)"], ["enc_13", "13º salário (%)"], ["enc_13_ferias", "13º sobre férias (%)"], ["enc_inss", "INSS patronal (%)"], ["enc_sat", "SAT/RAT (%)"],
     ["enc_sal_educacao", "Salário-educação (%)"], ["enc_sistema_s", "INCRA/Sistema S (%)"], ["enc_fgts", "FGTS (%)"], ["enc_fgts_rescisao", "FGTS rescisão (%)"], ["enc_prolabore_inss", "INSS sobre pró-labore (%)"]],
   actions: () => [btn("Salvar configurações", () => P.pages["Configurações"].salvar())],

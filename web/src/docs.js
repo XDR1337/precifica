@@ -242,7 +242,8 @@ P.docs.proposal = function (cfg, prop, itens) {
     for (const blk of escopo) {
       const tit = (blk.titulo || "").trim(), txt = sub(blk.texto).trim();
       if (!(tit || txt)) continue;
-      b += `<p class="pe">${tit ? desc(sub(tit)) + ": " : ""}${P.rich(txt)}</p>`;
+      if (tit && txt) b += `<p class="pe pet">${desc(sub(tit))}:</p><p class="pe">${P.rich(txt)}</p>`;
+      else b += `<p class="pe">${tit ? desc(sub(tit)) + ":" : ""}${P.rich(txt)}</p>`;
       for (const tp of String(blk.topicos || "").split("\n").map((x) => x.trim()).filter(Boolean))
         b += `<p class="pe pt"><span class="arr"></span><span>${P.rich(sub(tp))}</span></p>`;
     }
@@ -287,7 +288,7 @@ P.docs.proposal = function (cfg, prop, itens) {
   if (!pos.length && (prop.observacoes || "").trim()) pos = [{ titulo: "OBSERVAÇÕES COMERCIAIS IMPORTANTES", texto: prop.observacoes }];
   for (const s of pos) b += secao(s.titulo || "", s.texto || "", { nova: !!s.nova_pagina, espaco: dfnum(s.espaco) });
   b += P.docs.closing(cfg, prop, ctx, ac);
-  const css = `@page{size:A4;margin:9mm 13.7mm 15mm 12.35mm;@bottom-center{content:counter(page);font:10.7pt Calibri,Carlito,Arial,sans-serif;color:#000}}`;
+  const css = `@page{size:A4;margin:9mm 9.05mm 15mm 17mm;@bottom-center{content:counter(page);font:10.7pt Calibri,Carlito,Arial,sans-serif;color:#000}}`;
   return { html: `<div class="paper prop"><table class="sheet"><thead><tr><td>${head}</td></tr></thead><tbody><tr><td>${b}</td></tr></tbody></table></div>`, css,
     title: `Proposta ${numero} - ${ctx.cliente || "cliente"}` };
 };

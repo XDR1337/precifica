@@ -17,3 +17,6 @@ web/dropbox_folder.txt
 # dados e chaves locais
 *.db
 node_modules/
+
+graphify-out/
+ObsidianVault/
