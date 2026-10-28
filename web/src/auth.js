@@ -12,6 +12,8 @@ const KEY = "precifica.auth.v1";                 // neste aparelho: ultima empre
 const SES = "precifica.auth.me";                 // nesta aba: quem esta logado
 const ACCESS = "precifica.acesso.v1.";           // copia local do arquivo de acesso (entrar sem internet)
 const FILE = "precifica-acesso.json";
+const ADMIN = "precifica.admin.v1";               // copia local do login do administrador
+const ADMIN_PATH = "/Precifica_Admin/admin.json";   // no Dropbox do proprio administrador (fora das pastas das empresas)
 const ITER = 150000;
 const rd = (k, st = localStorage) => { try { return JSON.parse(st.getItem(k) || "null"); } catch (e) { return null; } };
 const wr = (k, v, st = localStorage) => { try { st.setItem(k, JSON.stringify(v)); } catch (e) { /* ok */ } };
@@ -35,7 +37,8 @@ P.auth = {
   slug() { return this.active ? slugOf(this.s.folder) : ""; },
   isAdmin() { return !!this.me && this.me.papel === "admin"; },
   isOwner() { return !!this.me && (this.me.papel === "dono" || this.me.papel === "admin"); },
-  accountIsAdmin() { return !!(P.sync.s.account && (P.ADMIN_IDS || []).includes(P.sync.s.account)); },
+  /** Conta Dropbox autorizada como administradora (lista P.ADMIN_IDS; enquanto a lista estiver vazia, qualquer conta pode criar o proprio login). */
+  adminAllowed() { return this.connected() && (!(P.ADMIN_IDS || []).length || P.ADMIN_IDS.includes(P.sync.s.account)); },
   connected() { return !!(P.sync.s.connected && P.sync.s.refresh && P.sync.s.account); },
   roleLabel() { return this.me ? ROLE[this.me.papel] || "" : ""; },
 
@@ -45,13 +48,17 @@ P.auth = {
     this.ready = ready; this.notice = redirectMsg && redirectMsg !== "ok" ? redirectMsg : "";
     if (this.s.mode === "local") { this.active = false; return ready(); }
     const me = rd(SES, sessionStorage) || (this.s.rem ? { u: this.s.rem.u, k: this.s.rem.k } : null);
+    const adm = me && me.papel === "admin" ? me : (this.s.adminRem && (rd(ADMIN) || {}).hash === this.s.adminRem.k ? { u: "admin", nome: "Administrador", papel: "admin", k: this.s.adminRem.k } : null);
+    if (adm && this.adminAllowed()) {
+      this.me = adm;
+      if (this.s.folder && this.s.admin) return this.activate();
+      this.mode = "admin"; return this.show();
+    }
     if (this.s.folder) {
-      if (this.s.admin && this.accountIsAdmin()) { this.me = { u: "admin", nome: "Administrador", papel: "admin" }; return this.activate(); }
       const acc = rd(ACCESS + slugOf(this.s.folder));
       const u = me && acc && (acc.users || []).find((x) => x.u === me.u);
       if (u && me.k && me.k === u.hash) { this.me = { u: u.u, nome: u.nome, papel: u.papel, k: u.hash }; return this.activate(); }
     }
-    if (this.accountIsAdmin() && this.s.admin) this.mode = "admin";
     if (this.s.kick) { this.notice = this.s.kick; delete this.s.kick; this.save(); }
     this.show();
   },
@@ -128,15 +135,37 @@ P.auth = {
     this.me = { u: "admin", nome: "Administrador", papel: "admin" };
     return this.activate();
   },
-  /** Troca a empresa (admin) ou sai da conta. */
+  /** Sai da conta (apaga o login lembrado). */
   leave(keepCompany) {
     try { sessionStorage.removeItem(SES); } catch (e) { /* ok */ }
-    this.s.rem = null;
-    if (!keepCompany) { this.s.folder = ""; this.s.admin = this.s.admin && this.accountIsAdmin(); }
+    this.s.rem = null; this.s.adminRem = null; this.s.admin = false;
+    if (!keepCompany) this.s.folder = "";
     this.s.mode = "";
     this.save();
     P.app.db && P.app.db._flush();
     location.reload();
+  },
+  /** Administrador: volta para a lista de empresas sem sair do login. */
+  switchCompany() { this.s.folder = ""; this.s.admin = false; this.save(); P.app.db && P.app.db._flush(); location.reload(); },
+  exitLocal() { this.s.mode = ""; this.save(); location.reload(); },
+  // ---- login do administrador: usuario e senha guardados no Dropbox dele (so a conta autorizada acessa)
+  async readAdmin() {
+    try { const tk = await this.token(), r = await dbx().getJson(tk, ADMIN_PATH); if (r) wr(ADMIN, r.data); return r ? r.data : null; }
+    catch (e) { const c = rd(ADMIN); if (c && !navigator.onLine) return c; throw e; }
+  },
+  async adminLogin(user, pw, remember, create) {
+    if (!this.adminAllowed()) throw new Error("Esta conta do Dropbox não está autorizada como administradora.");
+    let acc = await this.readAdmin();
+    if (create) {
+      if (acc) throw new Error("O administrador já foi criado nesta conta.");
+      const salt = newSalt(); acc = { v: 1, u: user.trim().toLowerCase(), salt, hash: await hashPw(pw, salt) };
+      const tk = await this.token(), d = dbx();
+      await d.rpc("files/create_folder_v2", tk, { path: "/Precifica_Admin", autorename: false });      // se ja existir, tudo bem
+      await d.putJson(tk, ADMIN_PATH, acc, null); wr(ADMIN, acc);
+    } else if (!acc || acc.u !== user.trim().toLowerCase() || (await hashPw(pw, acc.salt)) !== acc.hash) throw new Error("Usuário ou senha incorretos.");
+    this.s.adminRem = remember ? { k: acc.hash } : null;
+    this.me = { u: "admin", nome: "Administrador", papel: "admin", k: acc.hash };
+    wr(SES, this.me, sessionStorage); this.save();
   },
   useLocal() { this.s.mode = "local"; this.save(); location.reload(); },
   /** Reconfere o acesso junto da nuvem (chamado depois de sincronizar, no maximo a cada 5 min). */
@@ -230,6 +259,7 @@ P.auth = {
     if (this.notice) card.append(h("div", { class: "callout danger" }, h("p", { class: "msg", text: this.notice })));
     if (!this.connected()) return this.viewConnect(card);
     if (this.mode === "admin") return this.viewAdmin(card);
+    if (this.mode === "adminlogin") return this.viewAdminLogin(card);
     this.viewLogin(card);
   },
   viewConnect(card) {
@@ -280,7 +310,7 @@ P.auth = {
         if (r.claim) { this.claimFolder = sel.value; this.tab = "assumir"; return this.view(); }
         await this.activate();
       }) }, body));
-      if (this.accountIsAdmin()) card.append(btn("Entrar como administrador", () => { this.mode = "admin"; this.view(); }, "secondary", { class: "block" }));
+      card.append(btn("Entrar como administrador", () => this.startAdminLogin(), "secondary", { class: "block" }));
     }
     card.append(this.footer());
     if (this.tab === "assumir") this.viewClaim(card);
@@ -305,13 +335,40 @@ P.auth = {
       h("button", { type: "button", class: "auth-link", text: "Voltar", onClick: () => { this.tab = "entrar"; this.view(); } }));
   },
   viewClaimAgain() { this.view(); },
+  startAdminLogin() {
+    this.mode = "adminlogin"; this.notice = ""; this.adminSetup = null; this.view();
+    if (!this.adminAllowed()) return;
+    this.readAdmin().then((a) => { this.adminSetup = !a; this.view(); }).catch((e) => { this.notice = e.message; this.adminSetup = false; this.view(); });
+  },
+  viewAdminLogin(card) {
+    card.append(h("h2", { text: "Administrador" }));
+    const back = h("button", { type: "button", class: "auth-link", text: "Voltar", onClick: () => { this.mode = ""; this.notice = ""; this.view(); } });
+    if (!this.adminAllowed()) { card.append(h("div", { class: "callout danger" }, h("p", { class: "msg", text: "Esta conta do Dropbox não está autorizada como administradora do sistema. Conecte a conta do administrador (opção “Trocar de conta do Dropbox”)." })), back, this.footer()); return; }
+    if (this.adminSetup === null) { card.append(h("div", { class: "auth-busy" }, h("div", { class: "spinner" }), h("p", { text: "Verificando…" })), back); return; }
+    const setup = this.adminSetup;
+    const u = h("input", { class: "in", type: "text", autocomplete: "username", value: setup ? "" : (rd(ADMIN) || {}).u || "" }), p1 = h("input", { class: "in", type: "password", autocomplete: setup ? "new-password" : "current-password" }), p2 = h("input", { class: "in", type: "password", autocomplete: "new-password" });
+    const rem = h("input", { type: "checkbox" });
+    card.append(h("p", { class: "auth-p", text: setup ? "Primeiro acesso: crie o usuário e a senha do administrador. Eles ficam guardados no seu Dropbox." : "Entre com o usuário e a senha do administrador." }),
+      h("form", { class: "auth-form", onSubmit: async (ev) => {
+        ev.preventDefault(); this.notice = "";
+        try {
+          if (!u.value.trim()) throw new Error("Informe o usuário.");
+          if (setup && p1.value.length < 6) throw new Error("A senha precisa ter pelo menos 6 caracteres.");
+          if (setup && p1.value !== p2.value) throw new Error("As senhas não conferem.");
+          this.setBusy("Entrando…");
+          try { await this.adminLogin(u.value.replace(/\s+/g, ""), p1.value, rem.checked, setup); } finally { this.busy = ""; }
+          this.mode = "admin"; this.companies = null; this.view(); this.loadCompanies();
+        } catch (e) { this.notice = e.message; this.view(); }
+      } }, P.field({ label: "Usuário" }, u), P.field({ label: "Senha", help: setup ? "Mínimo de 6 caracteres." : "" }, p1), setup ? P.field({ label: "Repita a senha" }, p2) : null,
+      h("label", { class: "chk" }, rem, h("span", { text: "Lembrar meu usuário e senha neste aparelho" })), h("button", { type: "submit", class: "btn primary block", text: setup ? "Criar administrador" : "Entrar" })), back, this.footer());
+  },
   viewAdmin(card) {
     card.append(h("h2", { text: "Administração" }), h("p", { class: "auth-p", text: "Empresas que compartilharam a pasta com a sua conta do Dropbox. Toque em Abrir para carregar a base de dados da empresa." }));
     const list = this.companies || [];
     if (this.err) card.append(h("div", { class: "callout danger" }, h("p", { class: "msg", text: this.err })));
     card.append(list.length ? h("div", { class: "auth-list" }, list.map((c) => h("div", { class: "auth-row" }, h("div", {}, h("b", { text: c.name.replace(/^precifica-/i, "").replace(/-/g, " ") }), h("span", { text: c.name + (c.pending ? " · convite novo" : "") })),
       btn("Abrir", async () => { try { this.setBusy("Carregando " + c.name + "…"); await this.enterAsAdmin(c.name); } catch (e) { this.busy = ""; this.notice = e.message; this.view(); } }, "primary sm")))) : h("p", { class: "fh", text: "Nenhuma empresa encontrada. Cada empresa precisa compartilhar a pasta “Precifica-…” com esta conta do Dropbox." }));
-    card.append(h("div", { class: "auth-actions" }, btn("Atualizar lista", () => { this.companies = null; this.loadCompanies(); }, "secondary sm"), btn("Voltar", () => { this.mode = ""; this.view(); }, "ghost sm")), this.footer());
+    card.append(h("div", { class: "auth-actions" }, btn("Atualizar lista", () => { this.companies = null; this.loadCompanies(); }, "secondary sm"), btn("Sair do administrador", () => this.leave(true), "ghost sm")), this.footer());
   },
   footer() {
     const id = P.sync.s.account || "";
@@ -325,14 +382,14 @@ P.auth = {
   shellUser() {
     if (!this.active || !this.me) return null;
     return h("div", { class: "whoami" }, h("div", {}, h("b", { text: this.me.nome }), h("span", { text: this.roleLabel() + (this.s.empresa ? " · " + this.s.empresa : "") })),
-      btn(this.isAdmin() ? "Trocar empresa" : "Sair", () => this.leave(!this.isAdmin()), "ghost xs"));
+      btn(this.isAdmin() ? "Trocar empresa" : "Sair", () => (this.isAdmin() ? this.switchCompany() : this.leave(true)), "ghost xs"));
   },
   /** Cartoes da pagina Configuracoes no modo empresa. */
   configCards(pg, card) {
     const out = [];
     const guard = (fn) => async () => { try { if (await fn()) pg.rerender(); } catch (e) { P.info("Não foi possível concluir", e.message, "danger"); } };
     out.push(card(h("h3", { text: "Minha conta" }), h("p", { class: "cs", text: `${this.me.nome} · ${this.roleLabel()} · ${this.s.empresa || ""}` }),
-      h("div", { class: "bar" }, this.isAdmin() ? null : btn("Trocar minha senha", guard(() => this.changeOwnPw()), "secondary"), btn(this.isAdmin() ? "Trocar de empresa" : "Sair", () => this.leave(!this.isAdmin()), "secondary"))));
+      h("div", { class: "bar" }, this.isAdmin() ? null : btn("Trocar minha senha", guard(() => this.changeOwnPw()), "secondary"), this.isAdmin() ? btn("Trocar de empresa", () => this.switchCompany(), "secondary") : null, btn(this.isAdmin() ? "Sair do administrador" : "Sair", () => this.leave(true), "secondary"))));
     if (this.isOwner()) {
       const box = h("div", { class: "ulist" }, h("p", { class: "fh", text: "Carregando…" }));
       const draw = async () => {
