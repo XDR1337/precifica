@@ -71,12 +71,14 @@ P.definePage("Administração", {
     const rulesBox = h("div", { class: "adm-rows" }, h("p", { class: "fh", text: "Carregando…" }));
     const mk = (id, label) => { const el = P.inp({ kind: "int" }, ""); return { id, label, el }; };
     const fTeste = mk("teste_s", "Tempo do modo offline de teste (segundos)"), fBloq = mk("bloqueio_h", "Tempo de bloqueio depois do teste (horas)");
+    const fSup = h("input", { class: "in", type: "text", inputmode: "email", autocomplete: "off", placeholder: "e-mail do seu Dropbox" });
     let pol = { criadores: [], teste_s: 30, bloqueio_h: 5 };
     const save = async (msg) => { try { await A.policySave(pol); P.ui.toast(msg || "Salvo"); drawRules(); } catch (e) { err(e); } };
     const drawRules = async () => {
       try { pol = await A.policyRead(); } catch (e) { rulesBox.replaceChildren(h("p", { class: "fh", text: "Não foi possível carregar as regras: " + e.message })); return; }
       pol.criadores = pol.criadores || [];
       fTeste.el.value = String(pol.teste_s || 30); fBloq.el.value = String(pol.bloqueio_h || 5);
+      if (!fSup.value) fSup.value = pol.suporte_email || A.email() || "";
       rulesBox.replaceChildren(...(pol.criadores.length ? pol.criadores.map((c) => h("div", { class: "auth-row" }, h("div", {}, h("b", { text: c.email }), h("span", { text: `Empresas: ${c.limite === 0 ? "sem limite" : c.limite} · Pessoas convidadas: ${c.limite_func === 0 ? "sem limite" : (c.limite_func === undefined ? 5 : c.limite_func)}` })),
         h("div", { class: "bar" }, btn("Limite", async () => {
           const v = await P.ask("Limites de " + c.email, [{ key: "limite", label: "Quantas empresas pode criar?", kind: "int", required: true, min: 0, help: "0 = sem limite." },
@@ -98,6 +100,13 @@ P.definePage("Administração", {
         pol.criadores.push({ email: em, limite: Math.max(0, v.limite), limite_func: Math.max(0, v.limite_func) }); save("E-mail liberado");
       }))));
 
+    out.push(card(cardTitle("Suporte: acesso a todas as empresas", "Toda empresa criada passa a ser compartilhada com este e-mail. É assim que você vê, entra e edita a base de qualquer cliente em tempo real."),
+      P.field({ label: "E-mail do suporte (a sua conta do Dropbox)" }, fSup),
+      h("div", { class: "bar" }, btn("Salvar e-mail do suporte", async () => {
+        const em = fSup.value.trim().toLowerCase();
+        if (!/^\S+@\S+\.\S+$/.test(em)) return P.info("E-mail inválido", "Confira o e-mail digitado.", "warn");
+        pol.suporte_email = em; save("E-mail do suporte salvo");
+      })), h("p", { class: "fh", text: "Empresas que já existem são compartilhadas com você na próxima vez que o dono abrir. Você também pode pedir para o dono usar “Compartilhar com o suporte”, ou convidar o seu e-mail pelo Dropbox." })));
     out.push(card(cardTitle("Modo offline de teste", "Quem entra sem e-mail liberado e sem convite pode usar o modo offline por alguns segundos; depois o aparelho fica bloqueado."),
       h("div", { class: "fg" }, P.field({ label: fTeste.label }, fTeste.el), P.field({ label: fBloq.label }, fBloq.el)),
       h("div", { class: "bar" }, btn("Salvar regras", async () => {
@@ -122,8 +131,7 @@ P.definePage("Administração", {
         h("li", { html: "Na aba <b>Actions</b>, rode o workflow de novo (Run workflow). Depois disso as regras valem para todos." }))));
 
     // ---------------------------------------------------------------- senha
-    out.push(card(cardTitle("Minha conta de administrador"), h("div", { class: "bar" },
-      btn("Trocar senha", async () => { try { if (await A.changeAdminPw()) P.ui.toast("Senha alterada"); } catch (e) { err(e); } }, "secondary"),
+    out.push(card(cardTitle("Minha conta de administrador", "Você entra só com a conta do Dropbox (ID cadastrado em ADMIN_DROPBOX_IDS): " + (A.email() || P.sync.s.account || "")), h("div", { class: "bar" },
       btn("Sair", () => A.leave(true), "secondary"))));
     return out;
   },

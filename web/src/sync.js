@@ -356,6 +356,8 @@ P.sync = {
     addEventListener("online", () => this.run({ interactive: false }));
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") this.run({ interactive: false }); });
     if (this.connected) this.run({ interactive: false });
+    // com a tela aberta, confere a nuvem de tempos em tempos (quem esta editando junto ve as alteracoes sem recarregar)
+    setInterval(() => { if (document.visibilityState === "visible" && this.connected && !this.running) this.run({ interactive: false }); }, 25000);
   },
 };
 
