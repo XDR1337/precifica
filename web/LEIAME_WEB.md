@@ -94,3 +94,9 @@ node web\test\sync_test.js                           # junÃ§Ã£o entre dois apare
 - Dono: em Configuracoes > Usuarios da empresa cria/remove funcionarios, troca senhas e convida pelo Dropbox. Funcionario nao ve configuracoes, backup nem usuarios.
 - Administrador: conta Dropbox cujo ID esta na variavel `ADMIN_DROPBOX_IDS` (GitHub > Settings > Variables; ou `web/admin_ids.txt`). Ve as empresas que compartilharam a pasta com ele e abre qualquer uma com um clique. `SUPPORT_EMAIL` (opcional) mostra aos donos o botao "Compartilhar com o suporte".
 - Limite: sem servidor proprio, a senha do app e uma trava de uso; a protecao real dos dados e a permissao da pasta no Dropbox.
+
+## Administração, regras e modo offline de teste
+- O administrador tem um item próprio no menu ("Administração", abaixo de Configurações): empresas (abrir/excluir), e-mails que podem criar empresas (com limite por e-mail), tempo do modo offline de teste e tempo de bloqueio.
+- As regras ficam em `Precifica_Admin/politica.json` (privado) e `publico.json` (só hashes dos e-mails), no Dropbox do administrador. O site lê o `publico.json` pelo link da variável `POLICY_URL` (gerado no painel).
+- O app pede a permissão `account_info.read` do Dropbox para ler o e-mail da conta (marque em Permissions no console do app e reconecte).
+- Limite: sem servidor não há bloqueio por IP nem proteção contra quem edita o código; o bloqueio vale para o aparelho/navegador.

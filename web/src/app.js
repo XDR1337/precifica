@@ -12,7 +12,7 @@ const NAV = [
 const TITLES = {
   "Painel": "Painel", "Serviços e fichas": "Serviços e fichas técnicas", "Insumos e preços": "Insumos e preços de referência", "Equipe": "Equipe e pró-labore", "Custos fixos": "Custos fixos e depreciação",
   "Capacidade produtiva": "Capacidade produtiva", "Revenda": "Produtos de revenda", "Tabela de preços": "Tabela de preços", "Análise de preço": "Análise de preço", "Simulação": "Simulação de vendas",
-  "Relatórios gerenciais": "Relatórios gerenciais", "Concorrentes": "Análise de concorrentes", "Propostas": "Propostas comerciais", "Clientes": "Clientes", "Exportar PDF": "Exportar PDF", "Configurações": "Configurações",
+  "Relatórios gerenciais": "Relatórios gerenciais", "Concorrentes": "Análise de concorrentes", "Propostas": "Propostas comerciais", "Clientes": "Clientes", "Exportar PDF": "Exportar PDF", "Configurações": "Configurações", "Administração": "Administração do sistema",
 };
 const ALIASES = { "Serviços": "Serviços e fichas", "Simulação de vendas": "Simulação", "Insumos": "Insumos e preços" };
 const TABBAR = [["Painel", "◆", "Painel"], ["Serviços e fichas", "▤", "Serviços"], ["Simulação", "▲", "Simulação"], ["Propostas", "✎", "Propostas"]];
@@ -43,11 +43,12 @@ P.app = {
     addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); this.deferredInstall = e; });
     addEventListener("error", (e) => P.ui.toast("Erro: " + (e.message || "inesperado"), "danger", 5000));
     addEventListener("unhandledrejection", (e) => P.ui.toast("Erro: " + (e.reason && e.reason.message || e.reason || "inesperado"), "danger", 5000));
-    const first = this.nameFromHash() || "Painel";
+    const first = P.auth.adminHome ? "Administração" : this.nameFromHash() || "Painel";
     this.show(first, { push: false });
     const sp = document.getElementById("splash");
     if (sp) sp.remove();
-    if (this.db.cfgNum("onboarding_ok") < 1) setTimeout(() => P.welcome(), 500);
+    if (P.auth.adminHome) { /* painel do administrador: sem boas-vindas */ }
+    else if (this.db.cfgNum("onboarding_ok") < 1) setTimeout(() => P.welcome(), 500);
     else if (this.db.cfgNum("tutorial_nao_mostrar") < 1) setTimeout(() => this.tutorial.start(), 700);
     if (P.auth.pendingName) { P.auth.initCompany(this.db); this.changed(); }
     P.sync.start();
@@ -59,7 +60,9 @@ P.app = {
   buildShell() {
     this.navButtons = {};
     const nav = h("nav", { class: "nav", "aria-label": "Menu principal" });
-    for (const [group, items] of NAV) {
+    const groups = P.auth.adminHome ? [["ADMINISTRAÇÃO", [["Administração", "★"]]]]
+      : NAV.map(([g, items]) => [g, g === "SISTEMA" && P.auth.isAdmin() ? [...items, ["Administração", "★"]] : items]);
+    for (const [group, items] of groups) {
       nav.append(h("div", { class: "ng", text: group }));
       for (const [name, icon] of items) {
         const b = h("button", { type: "button", class: "ni", "data-nav": name, onClick: () => { this.closeDrawer(); this.show(name); } }, h("i", { text: icon }), h("span", { text: name }));
@@ -74,7 +77,7 @@ P.app = {
     this.topTitle = h("span", { class: "tt" });
     const top = h("header", { class: "top" }, h("button", { type: "button", class: "burger", "aria-label": "Abrir menu", text: "☰", onClick: () => document.body.classList.toggle("nav-open") }), this.topTitle, h("span", { class: "grow" }), P.syncBadge());
     this.pageEl = h("main", { class: "page", id: "page" });
-    this.tabbar = h("nav", { class: "tabbar", "aria-label": "Atalhos" }, TABBAR.map(([n, ic, lb]) => h("button", { type: "button", "data-nav": n, onClick: () => this.show(n) }, h("i", { text: ic }), h("span", { text: lb }))),
+    this.tabbar = h("nav", { class: "tabbar", "aria-label": "Atalhos" }, (P.auth.adminHome ? [["Administração", "★", "Administração"]] : TABBAR).map(([n, ic, lb]) => h("button", { type: "button", "data-nav": n, onClick: () => this.show(n) }, h("i", { text: ic }), h("span", { text: lb }))),
       h("button", { type: "button", onClick: () => document.body.classList.toggle("nav-open") }, h("i", { text: "☰" }), h("span", { text: "Mais" })));
     const scrim = h("div", { class: "scrim", onClick: () => this.closeDrawer() });
     document.getElementById("app").replaceChildren(side, scrim, h("div", { class: "main" }, top, this.pageEl), this.tabbar);
@@ -110,6 +113,7 @@ P.app = {
   },
   show(name, { push = true } = {}) {
     name = ALIASES[name] || name;
+    if (name === "Administração" && !P.auth.isAdmin()) name = "Painel";
     const def = P.pages[name];
     if (!def) return;
     const pg = this.pageCtx(name);
@@ -152,7 +156,7 @@ P.app = {
     const def = P.pages[pg.name];
     const y = window.scrollY;
     pg.head.replaceChildren(h("div", { class: "pt" }, h("h1", { text: TITLES[pg.name] || pg.name }), def.subtitle ? h("p", { class: "sub", text: def.subtitle }) : null),
-      def.actions ? h("div", { class: "pact" }, def.actions(pg)) : null);
+      def.actions ? h("div", { class: "pact" }, def.actions(pg)) : "");
     const out = def.render.call(def, pg);
     pg.body.replaceChildren(...[].concat(out).filter(Boolean));
     pg.dirty = false;

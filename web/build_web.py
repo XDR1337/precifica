@@ -25,7 +25,7 @@ from precifica.assets import ACRS_LOGO_PNG       # noqa: E402
 from precifica.core import APP_AUTHOR, APP_VERSION  # noqa: E402
 
 SRC = os.path.join(HERE, "src")
-JS_ORDER = ["core.js", "ui-base.js", "docs.js", "signature.js", "pages-a.js", "pages-b.js", "proposal.js", "tutorial.js", "importer.js", "sync.js", "auth.js", "app.js"]
+JS_ORDER = ["core.js", "ui-base.js", "docs.js", "signature.js", "pages-a.js", "pages-b.js", "proposal.js", "tutorial.js", "importer.js", "sync.js", "auth.js", "admin.js", "app.js"]
 APP_NAME = "Precifica"
 
 
@@ -69,6 +69,7 @@ def seed_js() -> str:
             f"P.SYNC_DROPBOX_KEY = {json.dumps(dropbox_key())};\n"
             f"P.SYNC_DROPBOX_FOLDER = {json.dumps(dropbox_folder())};\n"
             f"P.ADMIN_IDS = {json.dumps([x.strip() for x in _cfg('admin_ids.txt', 'PRECIFICA_ADMIN_IDS').replace(chr(10), ',').split(',') if x.strip()])};\n"
+            f"P.POLICY_URL = {json.dumps(_cfg('policy_url.txt', 'PRECIFICA_POLICY_URL'))};\n"
             f"P.SUPPORT_EMAIL = {json.dumps(_cfg('support_email.txt', 'PRECIFICA_SUPPORT_EMAIL'))};\n"
             f"P.APP_NAME = {json.dumps(APP_NAME)}; P.APP_VERSION = {json.dumps(APP_VERSION)}; P.APP_AUTHOR = {json.dumps(APP_AUTHOR)};\n")
 

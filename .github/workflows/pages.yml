@@ -35,6 +35,7 @@ jobs:
           PRECIFICA_DROPBOX_FOLDER: ${{ vars.DROPBOX_FOLDER }}
           PRECIFICA_ADMIN_IDS: ${{ vars.ADMIN_DROPBOX_IDS }}
           PRECIFICA_SUPPORT_EMAIL: ${{ vars.SUPPORT_EMAIL }}
+          PRECIFICA_POLICY_URL: ${{ vars.POLICY_URL }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

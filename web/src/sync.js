@@ -29,7 +29,7 @@ const dropbox = {
     const verifier = b64url(rnd), state = b64url(crypto.getRandomValues(new Uint8Array(16)));
     const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
     try { localStorage.setItem(PKCE_KEY, JSON.stringify({ verifier, state, redirect: this.redirectUri() })); } catch (e) { throw new Error("Não foi possível iniciar o login (armazenamento bloqueado)."); }
-    const q = new URLSearchParams({ client_id: this.key(), scope: "files.content.read files.content.write files.metadata.read sharing.read sharing.write", response_type: "code", code_challenge: challenge, code_challenge_method: "S256", token_access_type: "offline", redirect_uri: this.redirectUri(), state,
+    const q = new URLSearchParams({ client_id: this.key(), scope: "files.content.read files.content.write files.metadata.read sharing.read sharing.write account_info.read", response_type: "code", code_challenge: challenge, code_challenge_method: "S256", token_access_type: "offline", redirect_uri: this.redirectUri(), state,
       force_reauthentication: "true", force_reapprove: "true" });   // sempre pede login/conta e a permissao de novo (nao reaproveita a sessao do navegador)
     location.href = "https://www.dropbox.com/oauth2/authorize?" + q;
     await new Promise(() => {});                       // a pagina vai ser trocada
@@ -54,6 +54,10 @@ const dropbox = {
     const j = await this.tokenCall({ grant_type: "authorization_code", code, code_verifier: pk.verifier, redirect_uri: pk.redirect });
     P.sync.s.refresh = j.refresh_token; P.sync.s.account = j.account_id || ""; P.sync.s.connected = true; P.sync.s.provider = "dropbox";
     P.sync.setToken(j.access_token, j.expires_in);
+    try {                                              // e-mail da conta (para a lista de quem pode criar empresas)
+      const r = await fetch("https://api.dropboxapi.com/2/users/get_current_account", { method: "POST", headers: { Authorization: "Bearer " + j.access_token } });
+      if (r.ok) P.sync.s.email = String((await r.json()).email || "").toLowerCase();
+    } catch (e) { /* sem e-mail: o app pede para reconectar quando precisar */ }
     P.sync.save();
     return true;
   },
@@ -189,6 +193,24 @@ const dropbox = {
     const r = await this.rpc("sharing/add_folder_member", token, { shared_folder_id: id, quiet: false, members: [{ member: { ".tag": "email", email }, access_level: { ".tag": "editor" } }] });
     if (!r.res.ok) throw this.friendly(r.res, r.text);
   },
+  async deleteFolder(token, name) {
+    const r = await this.rpc("files/delete_v2", token, { path: "/" + name });
+    if (!r.res.ok) throw this.friendly(r.res, r.text);
+  },
+  /** Cria (ou acha) o link publico de um arquivo do proprio Dropbox. */
+  async publicLink(token, path) {
+    const r = await this.rpc("sharing/create_shared_link_with_settings", token, { path, settings: { requested_visibility: "public", audience: "public", access: "viewer" } });
+    if (r.res.ok) return r.j.url;
+    const l = await this.rpc("sharing/list_shared_links", token, { path, direct_only: true });
+    if (l.res.ok && l.j.links && l.j.links[0]) return l.j.links[0].url;
+    throw this.friendly(r.res, r.text);
+  },
+  /** Le um arquivo por link compartilhado, com o token de qualquer conta (nao precisa ser dona do arquivo). */
+  async sharedFile(token, url) {
+    const res = await this.call("https://content.dropboxapi.com/2/sharing/get_shared_link_file", token, { url });
+    if (!res.ok) throw this.friendly(res, await res.text());
+    return JSON.parse(await res.text());
+  },
   async revoke(token) { try { await fetch("https://api.dropboxapi.com/2/auth/token/revoke", { method: "POST", headers: { Authorization: "Bearer " + token } }); } catch (e) { /* ok */ } },
 };
 
@@ -245,7 +267,7 @@ P.sync = {
   s: load(), state: "idle", msg: "", token: null, tokenExp: 0, timer: null, running: false, listeners: [], providers: { dropbox, google: googleProvider },
 
   get provider() { return this.providers[this.s.provider || "dropbox"]; },
-  get connected() { return !!this.s.connected && this.provider.configured() && !(P.auth && P.auth.s.mode === "local"); },
+  get connected() { return !!this.s.connected && this.provider.configured() && !(P.auth && (P.auth.s.mode === "local" || P.auth.adminHome)); },
   save() { store(this.s); },
   on(fn) { this.listeners.push(fn); },
   set(state, msg = "") { this.state = state; this.msg = msg; this.listeners.forEach((f) => f()); },
