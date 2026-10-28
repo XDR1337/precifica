@@ -57,6 +57,14 @@ P.auth = {
     const h = await this.hashEmail(em), c = (p.criadores || []).find((x) => x.h === h);
     return c ? { limite: lim(c.limite, 1), limiteFunc: lim(c.limite_func, DEF_FUNC) } : null;
   },
+  /** A empresa so funciona enquanto o e-mail de quem a criou continua na lista do administrador (sem regras carregadas, nao bloqueia). */
+  async creatorListed(email) {
+    if (!this.policyOn() || !email) return true;
+    const p = rd(POLICY);
+    if (!p || email === this.supportEmail()) return true;
+    const h = await this.hashEmail(email);
+    return (p.criadores || []).some((x) => x.h === h);
+  },
   /** Empresas do Dropbox, regras e em quais delas este e-mail tem acesso. */
   async refreshLicense() {
     const tk = await this.token();
@@ -64,7 +72,7 @@ P.auth = {
     await this.loadPolicy();
     this.creatorEntry = await this.creatorInfo();
     await this.loadMine();
-    this.licensed = !this.policyOn() || !!this.creatorEntry || this.mine.length > 0 || (P.ADMIN_IDS || []).includes(P.sync.s.account);
+    this.licensed = !this.policyOn() || !!this.creatorEntry || this.mine.some((c) => !c.bloqueada) || (P.ADMIN_IDS || []).includes(P.sync.s.account);
     if (this.licensed && this.policyOn()) wr(LIC, { ok: true });
     this.s.multi = this.mine.length > 1; this.save();
   },
@@ -77,7 +85,7 @@ P.auth = {
       if (!acc || !Array.isArray(acc.members)) { this.unclaimed.push(c.name); continue; }
       this.accs[c.name] = acc;
       const m = em && acc.members.find((x) => x.email === em);
-      if (m) this.mine.push({ name: c.name, empresa: acc.empresa || nice(c.name), papel: m.papel, suspensa: !!acc.suspensa });
+      if (m) this.mine.push({ name: c.name, empresa: acc.empresa || nice(c.name), papel: m.papel, suspensa: !!acc.suspensa, bloqueada: !(await this.creatorListed(acc.criador)) });
     }
     d.forced = keep.f; d.folderOk = keep.ok; d.basePath = keep.bp;
   },
@@ -119,7 +127,7 @@ P.auth = {
     card.append(h("div", { class: "auth-brand" }, h("img", { src: P.LOGO, alt: "" }), h("div", {}, h("b", { text: "Precifica" }), h("span", { text: "Acesso bloqueado" }))),
       h("p", { class: "auth-p" }, "O tempo de teste acabou. Você poderá usar o modo offline de novo em ", left, "."),
       h("p", { class: "fh", text: "Já tem acesso? Entre com a conta do Dropbox que foi liberada." }),
-      this.connected() ? h("p", { class: "fh", text: `A conta ${this.email() || "do Dropbox"} ainda não foi liberada.` }) : null,
+      this.connected() ? h("p", { class: "fh", text: `A conta ${this.email() || "do Dropbox"} ainda não foi liberada.` }) : "",
       btn(this.connected() ? "Verificar meu acesso" : "Conectar ao Dropbox", async () => { if (!this.connected()) return P.sync.connect().catch((e) => P.info("Não foi possível conectar", e.message, "danger")); if (await this.unblockIfLicensed()) location.reload(); else P.ui.toast("Este e-mail ainda não tem acesso", "warn"); }, "primary", { class: "block" }));
     this.blockEl = h("div", { class: "auth", style: { zIndex: 300 } }, card);
     document.body.append(this.blockEl);
@@ -141,7 +149,7 @@ P.auth = {
     if (this.s.kick) { this.notice = this.s.kick; delete this.s.kick; this.save(); }
     if (this.s.folder && this.email() && !this.s.choose) {          // abre direto a ultima empresa (copia local do acesso: funciona sem internet)
       const acc = rd(ACCESS + slugOf(this.s.folder)), m = acc && Array.isArray(acc.members) && acc.members.find((x) => x.email === this.email());
-      if (m && !acc.suspensa) { this.me = { u: this.email(), nome: this.email(), email: this.email(), papel: m.papel }; return this.activate(); }
+      if (m && !acc.suspensa && (await this.creatorListed(acc.criador))) { this.me = { u: this.email(), nome: this.email(), email: this.email(), papel: m.papel }; return this.activate(); }
     }
     this.show();
   },
@@ -172,6 +180,7 @@ P.auth = {
   /** Entra na empresa escolhida (o e-mail ja foi conferido em loadMine). */
   pick(c) {
     if (c.suspensa) { this.notice = "Esta empresa está suspensa. Fale com o administrador do sistema."; return this.view(); }
+    if (c.bloqueada) { this.notice = "O acesso desta empresa foi encerrado pelo administrador do sistema."; return this.view(); }
     this.s.folder = c.name; this.s.empresa = c.empresa; this.s.admin = false;
     this.me = { u: this.email(), nome: this.email(), email: this.email(), papel: c.papel };
     return this.activate();
@@ -219,7 +228,7 @@ P.auth = {
     this.me = { u: em, nome: em, email: em, papel: "dono" };
     const key = P.storeKey(slugOf(folder));
     if (!isNew && !localStorage.getItem(key)) { try { const old = localStorage.getItem(P.storeKey("")); if (old) localStorage.setItem(key, old); } catch (e) { /* ok */ } }   // dados que ja estavam neste aparelho
-    if (isNew) this.pendingName = empresa;
+    if (isNew) { this.pendingName = empresa; this.s.pending = empresa; if ((this.companies || []).length) this.s.multi = true; this.save(); }
   },
   /** Compartilha a pasta da empresa com o e-mail do suporte (administrador), para ele poder ver e ajustar a base. */
   async shareSupport() {
@@ -241,6 +250,7 @@ P.auth = {
     const nome = this.pendingName, sigla = nome.split(/\s+/)[0];
     const esc = (t) => t.replace(/[<>&"]/g, "");
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120"><rect width="320" height="120" rx="14" fill="#1B2A3D"/><rect x="18" y="62" width="14" height="30" fill="#FF9900"/><rect x="38" y="48" width="14" height="44" fill="#FF9900"/><rect x="58" y="32" width="14" height="60" fill="#FF9900"/><text x="92" y="72" font-family="Arial,sans-serif" font-size="${nome.length > 16 ? 20 : 26}" font-weight="700" fill="#fff">${esc(nome)}</text></svg>`;
+    delete this.s.pending; this.save();
     db.setMany({ empresa_nome: nome, empresa_fantasia: nome, empresa_sigla: sigla, empresa_cidade: "", empresa_uf: "", empresa_logo: "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg) });
     this.pendingName = "";
   },
@@ -279,6 +289,8 @@ P.auth = {
     if (!r) return;
     wr(ACCESS + this.slug(), r.data);
     const m = (r.data.members || []).find((x) => x.email === this.me.email);
+    await this.loadPolicy();
+    if (!(await this.creatorListed(r.data.criador))) { this.s.kick = "O acesso desta empresa foi encerrado pelo administrador do sistema."; this.leave(true); return; }
     if (r.data.suspensa) { this.s.kick = "Esta empresa foi suspensa. Fale com o administrador do sistema."; this.leave(true); return; }
     if (!m || m.papel !== this.me.papel) { this.s.kick = "O seu acesso a esta empresa foi alterado. Entre novamente."; this.leave(true); }
   },
@@ -413,7 +425,7 @@ P.auth = {
       if (!this.email()) this.err = "O app ainda não leu o e-mail da sua conta. Toque em “Trocar de conta do Dropbox” e conecte de novo.";
     } catch (e) { if (navigator.onLine) this.err = e.message; }
     this.loading = false;
-    if (!this.err && this.licensed !== false && this.mine.length === 1 && !this.s.choose && !this.mine[0].suspensa) return this.pick(this.mine[0]);   // uma empresa so: entra direto
+    if (!this.err && this.licensed !== false && this.mine.length === 1 && !this.s.choose && !this.mine[0].suspensa && !this.mine[0].bloqueada) return this.pick(this.mine[0]);   // uma empresa so: entra direto
     this.view();
   },
   view() {
@@ -439,8 +451,8 @@ P.auth = {
     const canCreate = !this.policyOn() || !!this.creatorEntry, mine = this.mine;
     if (mine.length) {
       card.append(h("h2", { text: mine.length > 1 ? "Escolha a empresa" : "Sua empresa" }), h("p", { class: "auth-p", text: `Conectado como ${this.email()}.` }),
-        h("div", { class: "auth-list" }, mine.map((c) => h("div", { class: "auth-row" }, h("div", {}, h("b", { text: c.empresa }), h("span", { text: ROLE[c.papel] + (c.suspensa ? " · suspensa" : "") })),
-          btn(c.suspensa ? "Suspensa" : "Entrar", () => this.pick(c), c.suspensa ? "secondary sm" : "primary sm")))));
+        h("div", { class: "auth-list" }, mine.map((c) => h("div", { class: "auth-row" }, h("div", {}, h("b", { text: c.empresa }), h("span", { text: ROLE[c.papel] + (c.suspensa ? " · suspensa" : c.bloqueada ? " · acesso encerrado" : "") })),
+          btn(c.suspensa ? "Suspensa" : c.bloqueada ? "Encerrada" : "Entrar", () => this.pick(c), c.suspensa || c.bloqueada ? "secondary sm" : "primary sm")))));
     } else {
       card.append(h("h2", { text: "Nenhuma empresa para este e-mail" }), h("p", { class: "auth-p", text: `Conectado como ${this.email() || "(e-mail não lido)"}. ${canCreate ? "Você pode criar uma empresa." : "Peça ao dono da empresa para adicionar o seu e-mail e aceite o convite do Dropbox (e-mail ou dropbox.com › Compartilhado)."}` }));
     }
@@ -461,9 +473,11 @@ P.auth = {
   },
   viewNoAccess(card) {
     const r = this.rules();
+    const perdida = this.mine.find((c) => c.bloqueada);
     card.append(h("h2", { text: "Acesso restrito" }),
+      perdida ? h("div", { class: "callout danger" }, h("p", { class: "msg", text: `O acesso à empresa “${perdida.empresa}” foi encerrado pelo administrador do sistema. Fale com ele para reativar.` })) : "",
       h("p", { class: "auth-p", text: `A conta ${this.email() || "do Dropbox"} ainda não foi liberada. Peça ao dono da empresa para adicionar o seu e-mail, ou fale com o administrador do sistema.` }),
-      !this.email() ? h("p", { class: "fh", text: "Se o seu e-mail já foi liberado, toque em “Trocar de conta do Dropbox” e conecte de novo para o app ler o e-mail." }) : null,
+      !this.email() ? h("p", { class: "fh", text: "Se o seu e-mail já foi liberado, toque em “Trocar de conta do Dropbox” e conecte de novo para o app ler o e-mail." }) : "",
       btn("Verificar de novo", () => { this.companies = null; this.licensed = undefined; this.loadCompanies(); }, "primary", { class: "block" }),
       btn(`Usar o modo offline (${r.teste} segundos)`, () => this.useLocal(), "secondary", { class: "block" }), this.footer());
   },
@@ -487,6 +501,28 @@ P.auth = {
     const out = [];
     const guard = (fn) => async () => { try { if (await fn()) pg.rerender(); } catch (e) { P.info("Não foi possível concluir", e.message, "danger"); } };
     const many = !this.isAdmin() && (this.mine.length > 1 || this.s.multi);
+    if (this.policyOn() && !this.isAdmin() && this.isOwner()) {
+      const txt = h("p", { class: "cs", text: "Consultando os seus limites…" }), bar = h("div", { class: "bar" });
+      (async () => {
+        try { await this.refreshLicense(); } catch (e) { txt.textContent = "Não foi possível consultar os limites: " + e.message; return; }
+        const ent = this.creatorEntry, em = this.email();
+        if (!ent) { txt.textContent = "Este e-mail não está liberado para criar empresas."; return; }
+        const mias = Object.values(this.accs).filter((a) => a.criador === em);
+        const pessoas = mias.reduce((n, a) => n + a.members.filter((m) => m.email !== em).length, 0);
+        const L = (v, un) => (v === Infinity ? "sem limite" : `${v} ${un}${v === 1 ? "" : "s"}`);
+        txt.textContent = `Empresas criadas por você: ${mias.length} (limite: ${L(ent.limite, "empresa")}). Pessoas convidadas: ${pessoas} (limite: ${L(ent.limiteFunc, "pessoa")}).`;
+        if (mias.length < ent.limite) bar.append(btn("+ Criar nova empresa", guard(async () => {
+          const v = await P.ask("Nova empresa", [{ key: "nome", label: "Nome da empresa", required: true }], {}, { ok: "Criar empresa" });
+          if (!v) return false;
+          await this.create({ empresa: v.nome.trim() });
+          wr(SES, this.me, sessionStorage); P.app.db && P.app.db._flush();
+          location.reload();
+          return false;
+        })));
+        else bar.append(h("span", { class: "fh", text: "Você atingiu o limite de empresas. Para criar mais, fale com o administrador." }));
+      })();
+      out.push(card(h("h3", { text: "Limites do seu acesso" }), txt, bar));
+    }
     out.push(card(h("h3", { text: "Minha conta" }), h("p", { class: "cs", text: `${this.isAdmin() ? "Administrador" : this.me.email} · ${this.roleLabel()} · ${this.s.empresa || ""}` }),
       h("div", { class: "bar" }, this.isAdmin() ? btn("Voltar à Administração", () => this.switchCompany(), "secondary") : null, many ? btn("Trocar de empresa", () => this.switchCompany(), "secondary") : null, btn("Sair", () => this.leave(true), "secondary"))));
     if (this.isOwner()) {
@@ -508,3 +544,4 @@ P.auth = {
     return out;
   },
 };
+P.auth.pendingName = P.auth.s.pending || "";   // empresa criada ha pouco (a tela recarrega depois de criar)
