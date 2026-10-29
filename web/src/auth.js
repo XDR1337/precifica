@@ -13,7 +13,7 @@ const KEY = "precifica.auth.v1";                 // neste aparelho: ultima empre
 const SES = "precifica.auth.me";                 // nesta aba: quem esta logado
 const ACCESS = "precifica.acesso.v2.";           // copia local do arquivo de acesso (entrar sem internet)
 const FILE = "precifica-acesso.json";
-const POLICY = "precifica.policy.v1", LIC = "precifica.lic.v1", TRIAL = "precifica.trial.v1", BLOCK = "precifica.block.v1";
+const POLICY = "precifica.policy.v1";
 const PRIV = "/Precifica_Admin/politica.json", PUB = "/Precifica_Admin/publico.json";   // regras do sistema (privada com e-mails / publica so com hashes)
 const DEF_FUNC = 5;                               // limite padrao de pessoas convidadas por criador
 const rd = (k, st = localStorage) => { try { return JSON.parse(st.getItem(k) || "null"); } catch (e) { return null; } };
@@ -43,8 +43,6 @@ P.auth = {
     const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("precifica:" + String(e).trim().toLowerCase()));
     return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
   },
-  /** Regras do teste offline (configuradas no painel do administrador). */
-  rules() { const p = rd(POLICY) || {}; return { teste: Math.max(5, +p.teste_s || 30), bloqueio: Math.max(0.05, +p.bloqueio_h || 5) }; },
   async loadPolicy() {
     if (!this.policyOn()) return null;
     try { const j = await dbx().sharedFile(await this.token(), P.POLICY_URL); wr(POLICY, j); return j; } catch (e) { return rd(POLICY); }
@@ -73,7 +71,6 @@ P.auth = {
     this.creatorEntry = await this.creatorInfo();
     await this.loadMine();
     this.licensed = !this.policyOn() || !!this.creatorEntry || this.mine.some((c) => !c.bloqueada) || (P.ADMIN_IDS || []).includes(P.sync.s.account);
-    if (this.licensed && this.policyOn()) wr(LIC, { ok: true });
     this.s.multi = this.mine.length > 1; this.save();
   },
   async loadMine() {
@@ -89,58 +86,11 @@ P.auth = {
     }
     d.forced = keep.f; d.folderOk = keep.ok; d.basePath = keep.bp;
   },
-  // ---- modo offline de teste e bloqueio (so neste aparelho: sem servidor nao ha como bloquear por IP)
-  isBlocked() {
-    const b = rd(BLOCK);
-    if (!b) return false;
-    if (Date.now() < b.until) return true;
-    try { localStorage.removeItem(BLOCK); localStorage.removeItem(TRIAL); } catch (e) { /* ok */ }
-    return false;
-  },
-  async unblockIfLicensed() {
-    if (!this.connected()) return false;
-    try { await this.refreshLicense(); } catch (e) { return false; }
-    if (!this.licensed) return false;
-    try { localStorage.removeItem(BLOCK); localStorage.removeItem(TRIAL); } catch (e) { /* ok */ }
-    return true;
-  },
-  startTrial() {
-    const r = this.rules(); const t = rd(TRIAL) || { used: 0 };
-    const chip = h("div", { class: "trialchip" }), txt = h("span"), out = h("button", { type: "button", text: "Entrar com uma conta", onClick: () => this.exitLocal() });
-    chip.append(txt, out); document.body.append(chip);
-    const iv = setInterval(() => {
-      if (document.visibilityState === "hidden") return;
-      t.used += 1; wr(TRIAL, t); tick();
-    }, 1000);
-    const tick = () => {
-      const left = Math.ceil(r.teste - t.used);
-      if (left <= 0) { clearInterval(iv); chip.remove(); wr(BLOCK, { until: Date.now() + r.bloqueio * 3600000 }); P.app.db && P.app.db._flush(); this.showBlocked(); return; }
-      txt.textContent = `Modo offline de teste: ${left}s`;
-    };
-    tick();
-  },
-  showBlocked() {
-    const sp = document.getElementById("splash"); if (sp) sp.remove();
-    if (this.blockEl) this.blockEl.remove();
-    const b = rd(BLOCK) || { until: Date.now() }, left = h("b"), card = h("div", { class: "auth-card" });
-    const fmt = (ms) => { const m = Math.max(0, Math.ceil(ms / 60000)); return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min` : `${m} min`; };
-    card.append(h("div", { class: "auth-brand" }, h("img", { src: P.LOGO, alt: "" }), h("div", {}, h("b", { text: "Precifica" }), h("span", { text: "Acesso bloqueado" }))),
-      h("p", { class: "auth-p" }, "O tempo de teste acabou. Você poderá usar o modo offline de novo em ", left, "."),
-      h("p", { class: "fh", text: "Já tem acesso? Entre com a conta do Dropbox que foi liberada." }),
-      this.connected() ? h("p", { class: "fh", text: `A conta ${this.email() || "do Dropbox"} ainda não foi liberada.` }) : "",
-      btn(this.connected() ? "Verificar meu acesso" : "Conectar ao Dropbox", async () => { if (!this.connected()) return P.sync.connect().catch((e) => P.info("Não foi possível conectar", e.message, "danger")); if (await this.unblockIfLicensed()) location.reload(); else P.ui.toast("Este e-mail ainda não tem acesso", "warn"); }, "primary", { class: "block" }));
-    this.blockEl = h("div", { class: "auth", style: { zIndex: 300 } }, card);
-    document.body.append(this.blockEl);
-    const upd = () => { left.textContent = fmt(b.until - Date.now()); if (Date.now() >= b.until) location.reload(); };
-    upd(); setInterval(upd, 15000);
-  },
-
   // ---------------------------------------------------------------- entrada
   /** Chamado ao abrir o app. Quando o acesso estiver liberado, chama ready(). */
   async enter(ready, redirectMsg) {
     this.ready = ready; this.notice = redirectMsg && redirectMsg !== "ok" ? redirectMsg : "";
-    if (this.isBlocked() && !(await this.unblockIfLicensed())) return this.showBlocked();
-    if (this.s.mode === "local") { this.active = false; if (this.policyOn() && !rd(LIC)) this.startTrial(); return ready(); }
+    if (this.s.mode) { delete this.s.mode; this.save(); }          // o modo sem conta (local/teste) nao existe mais
     if (this.adminAllowed()) {                                      // a conta do administrador entra direto no painel
       this.me = { u: "admin", nome: "Administrador", papel: "admin" };
       if (this.s.folder && this.s.admin) return this.activate();
@@ -311,8 +261,6 @@ P.auth = {
     P.app.db && P.app.db._flush();
     location.reload();
   },
-  exitLocal() { this.s.mode = ""; this.save(); location.reload(); },
-  useLocal() { this.s.mode = "local"; this.save(); location.reload(); },
   /** Reconfere o acesso junto da nuvem (chamado depois de sincronizar, no maximo a cada 5 min). */
   async revalidate() {
     if (!this.active || this.isAdmin() || Date.now() - (this.lastCheck || 0) < 300000) return;
@@ -490,7 +438,7 @@ P.auth = {
     card.append(h("h2", { text: "Entrar" }), h("p", { class: "auth-p", text: "Entre com a sua conta do Dropbox. Os dados da sua empresa ficam lá, e o seu e-mail define a que empresas você tem acesso." }),
       btn("Entrar com o Dropbox", () => P.sync.connect().catch((e) => { this.notice = e.message; this.view(); }), "primary", { class: "block" }),
       h("p", { class: "fh", text: "Você escolhe a conta do Dropbox na próxima tela. Se ainda não tem uma, é grátis em dropbox.com." }),
-      h("button", { type: "button", class: "auth-link", text: "Usar só neste aparelho, sem login e sem sincronização", onClick: () => this.useLocal() }));
+      "");
   },
   viewHome(card) {
     if (this.loading && !this.mine.length) { card.append(h("div", { class: "auth-busy" }, h("div", { class: "spinner" }), h("p", { text: "Verificando o seu acesso…" }))); return; }
@@ -520,20 +468,32 @@ P.auth = {
     card.append(btn("Verificar de novo", () => { this.companies = null; this.loadCompanies(); }, "ghost sm"), this.footer());
   },
   viewNoAccess(card) {
-    const r = this.rules();
     const perdida = this.mine.find((c) => c.bloqueada);
     card.append(h("h2", { text: "Acesso restrito" }),
       perdida ? h("div", { class: "callout danger" }, h("p", { class: "msg", text: `O acesso à empresa “${perdida.empresa}” foi encerrado pelo administrador do sistema. Fale com ele para reativar.` })) : "",
       h("p", { class: "auth-p", text: `A conta ${this.email() || "do Dropbox"} ainda não foi liberada. Peça ao dono da empresa para adicionar o seu e-mail, ou fale com o administrador do sistema.` }),
       !this.email() ? h("p", { class: "fh", text: "Se o seu e-mail já foi liberado, toque em “Trocar de conta do Dropbox” e conecte de novo para o app ler o e-mail." }) : "",
       btn("Verificar de novo", () => { this.companies = null; this.licensed = undefined; this.loadCompanies(); }, "primary", { class: "block" }),
-      btn(`Usar o modo offline (${r.teste} segundos)`, () => this.useLocal(), "secondary", { class: "block" }), this.footer());
+      h("p", { class: "fh", text: "Se for pedir a liberação, envie o e-mail e o ID abaixo." }), this.contaInfo(), this.footer(true));
   },
-  footer() {
-    const id = P.sync.s.account || "";
+  /** Copia um texto (com alternativa para navegadores que bloqueiam a area de transferencia). */
+  async copy(text) {
+    try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* tenta o metodo antigo */ }
+    try { const t = h("textarea", { value: text, style: { position: "fixed", opacity: 0 } }); document.body.append(t); t.select(); const ok = document.execCommand("copy"); t.remove(); return ok; } catch (e) { return false; }
+  },
+  /** Linha "titulo + valor + Copiar" (e-mail e ID da conta Dropbox). */
+  copyRow(label, value) {
+    const b = btn("Copiar", async () => { const ok = await this.copy(value); b.textContent = ok ? "Copiado ✓" : "Selecione e copie"; setTimeout(() => { b.textContent = "Copiar"; }, 1800); }, "secondary xs");
+    return h("div", { class: "copyrow" }, h("div", {}, h("span", { class: "fh", text: label }), h("code", { text: value })), b);
+  },
+  /** E-mail e ID da conta Dropbox conectada, com botao de copiar. */
+  contaInfo() {
+    const em = this.email(), id = P.sync.s.account || "";
+    return h("div", { class: "copybox" }, em ? this.copyRow("E-mail da conta Dropbox", em) : "", id ? this.copyRow("ID da conta Dropbox", id) : "");
+  },
+  footer(semInfo) {
     return h("div", { class: "auth-foot" }, h("button", { type: "button", class: "auth-link", text: "Trocar de conta do Dropbox", onClick: () => { P.sync.disconnect(); this.companies = null; this.licensed = undefined; this.mode = ""; this.view(); } }),
-      id ? h("details", {}, h("summary", { text: "Informações da conta" }), h("p", { class: "fh", text: "ID da conta Dropbox: " + id + (this.email() ? " · " + this.email() : "") })) : null,
-      h("button", { type: "button", class: "auth-link", text: "Usar só neste aparelho (sem login)", onClick: () => this.useLocal() }));
+      this.connected() && !semInfo ? h("details", {}, h("summary", { text: "Informações da conta" }), this.contaInfo()) : "");
   },
 
   // ---------------------------------------------------------------- pecas da tela principal

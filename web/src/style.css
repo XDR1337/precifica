@@ -398,3 +398,6 @@ select.in{padding-right:8px}
 
 /* rodape do menu: nome em cima, botoes embaixo (nao corta em telas estreitas) */
 .whoami{flex-direction:column;align-items:stretch;gap:6px}.whoami b,.whoami span{overflow-wrap:anywhere}.whoami .bar{justify-content:flex-start;flex-wrap:wrap;gap:6px}
+
+/* e-mail e ID da conta, faceis de copiar */
+.copybox{display:flex;flex-direction:column;gap:8px;margin:6px 0}.copyrow{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--bd);border-radius:10px;padding:8px 10px;background:var(--bg)}.copyrow>div{min-width:0}.copyrow span{display:block}.copyrow code{display:block;font-size:13px;overflow-wrap:anywhere;word-break:break-all;user-select:all;color:var(--ink)}

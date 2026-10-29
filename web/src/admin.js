@@ -85,15 +85,12 @@ P.definePage("Administração", {
 
     // ---------------------------------------------------------------- regras (e-mails + teste)
     const rulesBox = h("div", { class: "adm-rows" }, h("p", { class: "fh", text: "Carregando…" }));
-    const mk = (id, label) => { const el = P.inp({ kind: "int" }, ""); return { id, label, el }; };
-    const fTeste = mk("teste_s", "Tempo do modo offline de teste (segundos)"), fBloq = mk("bloqueio_h", "Tempo de bloqueio depois do teste (horas)");
     const fSup = h("input", { class: "in", type: "text", inputmode: "email", autocomplete: "off", placeholder: "e-mail do seu Dropbox" });
     let pol = { criadores: [], teste_s: 30, bloqueio_h: 5 };
     const save = async (msg) => { try { await A.policySave(pol); P.ui.toast(msg || "Salvo"); drawRules(); } catch (e) { err(e); } };
     const drawRules = async () => {
       try { pol = await A.policyRead(); } catch (e) { rulesBox.replaceChildren(h("p", { class: "fh", text: "Não foi possível carregar as regras: " + e.message })); return; }
       pol.criadores = pol.criadores || [];
-      fTeste.el.value = String(pol.teste_s || 30); fBloq.el.value = String(pol.bloqueio_h || 5);
       if (!fSup.value) fSup.value = pol.suporte_email || A.email() || "";
       rulesBox.replaceChildren(...(pol.criadores.length ? pol.criadores.map((c) => h("div", { class: "auth-row" }, h("div", {}, h("b", { text: c.email }), h("span", { text: `Empresas: ${c.limite === 0 ? "sem limite" : c.limite} · Pessoas convidadas: ${c.limite_func === 0 ? "sem limite" : (c.limite_func === undefined ? 5 : c.limite_func)}` })),
         h("div", { class: "bar" }, btn("Limite", async () => {
@@ -123,17 +120,8 @@ P.definePage("Administração", {
         if (!/^\S+@\S+\.\S+$/.test(em)) return P.info("E-mail inválido", "Confira o e-mail digitado.", "warn");
         pol.suporte_email = em; save("E-mail do suporte salvo");
       })), h("p", { class: "fh", text: "Empresas que já existem são compartilhadas com você na próxima vez que o dono abrir. Você também pode pedir para o dono usar “Compartilhar com o suporte”, ou convidar o seu e-mail pelo Dropbox." })));
-    out.push(card(cardTitle("Modo offline de teste", "Quem entra sem e-mail liberado e sem convite pode usar o modo offline por alguns segundos; depois o aparelho fica bloqueado."),
-      h("div", { class: "fg" }, P.field({ label: fTeste.label }, fTeste.el), P.field({ label: fBloq.label }, fBloq.el)),
-      h("div", { class: "bar" }, btn("Salvar regras", async () => {
-        const t = Math.round(+String(fTeste.el.value).replace(",", ".")), b = +String(fBloq.el.value).replace(",", ".");
-        if (!(t >= 5) || !(b > 0)) return P.info("Valores inválidos", "O teste deve ter pelo menos 5 segundos e o bloqueio mais de 0 hora.", "warn");
-        pol.teste_s = t; pol.bloqueio_h = b; save("Regras salvas");
-      })),
-      h("p", { class: "fh", text: "Atenção: o bloqueio vale para o aparelho/navegador. Este sistema não tem servidor, então não dá para bloquear por IP; quem limpar os dados do navegador consegue um novo teste." })));
-
     // ---------------------------------------------------------------- publicar as regras
-    const st = P.POLICY_URL ? "Ativa: o site já está lendo as regras acima." : "Ainda não ativada: sem o link, o site deixa todo mundo criar empresas e não aplica o bloqueio.";
+    const st = P.POLICY_URL ? "Ativa: o site já está lendo as regras acima." : "Ainda não ativada: sem o link, o site deixa todo mundo criar empresas e não aplica os limites.";
     out.push(card(cardTitle("Ativar as regras no site", st),
       h("div", { class: "bar" }, btn("Gerar o link das regras", async () => {
         try {
@@ -147,7 +135,7 @@ P.definePage("Administração", {
         h("li", { html: "Na aba <b>Actions</b>, rode o workflow de novo (Run workflow). Depois disso as regras valem para todos." }))));
 
     // ---------------------------------------------------------------- senha
-    out.push(card(cardTitle("Minha conta de administrador", "Você entra só com a conta do Dropbox (ID cadastrado em ADMIN_DROPBOX_IDS): " + (A.email() || P.sync.s.account || "")), h("div", { class: "bar" },
+    out.push(card(cardTitle("Minha conta de administrador", "Você entra só com a conta do Dropbox. O ID abaixo é o que vai na variável ADMIN_DROPBOX_IDS do GitHub."), A.contaInfo(), h("div", { class: "bar" },
       btn("Sair", () => A.leave(true), "secondary"))));
     return out;
   },

@@ -318,7 +318,7 @@ P.sync = {
   s: load(), state: "idle", msg: "", token: null, tokenExp: 0, timer: null, running: false, listeners: [], providers: { dropbox, google: googleProvider },
 
   get provider() { return this.providers[this.s.provider || "dropbox"]; },
-  get connected() { return !!this.s.connected && this.provider.configured() && !(P.auth && (P.auth.s.mode === "local" || P.auth.adminHome)); },
+  get connected() { return !!this.s.connected && this.provider.configured() && !(P.auth && P.auth.adminHome); },
   save() { store(this.s); },
   on(fn) { this.listeners.push(fn); },
   set(state, msg = "") { this.state = state; this.msg = msg; this.listeners.forEach((f) => f()); },

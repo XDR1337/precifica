@@ -343,10 +343,6 @@ P.definePage("Configurações", {
         : [btn("Conectar ao Dropbox", () => { saveAdv(); sy.connect().catch((e) => P.info("Não foi possível conectar", e.message, "danger")); })]),
       h("p", { class: "fh", text: "Se aparecer erro ao conectar, a chave do app Dropbox pode estar errada: avise o administrador." }),
       h("p", { class: "fh", text: "Privacidade: o Dropbox vai informar que o app pode acessar arquivos. O app só lê e grava o arquivo precifica-dados.json na pasta compartilhada." }), adv);    const sobre = card(h("h3", { text: `${P.APP_NAME} ${P.APP_VERSION}` }), h("p", { class: "cs", text: `Desenvolvido pela ${P.APP_AUTHOR} (projeto de extensão PROEX – UniBrasil) como alternativa à Planilha de Precificação EG3 para quem não tem Microsoft Excel. Os cálculos seguem a planilha R02, com as correções apontadas no relatório final do projeto.` }));
-    if (P.auth.s.mode === "local") {                     // modo local: nada vai para a nuvem
-      const loc = card(cardTitle("Modo local", "Os dados ficam só neste aparelho e não são enviados ao Dropbox."), h("div", { class: "bar" }, btn("Entrar com uma conta", () => P.auth.exitLocal())));
-      return [empresa, params, listas, enc, tut, loc, dados, sobre];
-    }
     if (P.auth.active) {                                 // modo empresa: login por usuario, pasta fixa da empresa
       const sc = card(cardTitle("Sincronização (Dropbox)", "Mantém o celular, o computador e a equipe com os mesmos dados."), h("p", { class: "msg", text: stTxt }),
         h("div", { class: "bar" }, btn("Sincronizar agora", () => sy.run({ interactive: true }).then(() => pg.rerender()).catch((e) => P.info("Sincronização", e.message, "danger")))));

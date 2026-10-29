@@ -94,10 +94,9 @@ node web\test\sync_test.js                           # junÃ§Ã£o entre dois a
 - Dono: em Configuracoes > Pessoas com acesso informa so o e-mail (e o papel); o app convida a pessoa para a pasta. Funcionario nao adiciona pessoas, nem ve configuracoes ou backup.
 - Administrador: sem senha; a conta Dropbox cujo ID esta em ADMIN_DROPBOX_IDS entra direto no painel. Toda empresa nova e compartilhada automaticamente com o e-mail do suporte (definido no painel), e o administrador abre qualquer uma e edita em tempo real (a tela confere a nuvem a cada ~25 s). Variaveis `ADMIN_DROPBOX_IDS` e `SUPPORT_EMAIL` (opcional).
 - Limite: sem servidor proprio, a protecao real dos dados e a permissao da pasta no Dropbox.
-## Administração, regras e modo offline de teste
-- O administrador tem um item próprio no menu ("Administração", abaixo de Configurações): empresas (abrir/excluir), e-mails que podem criar empresas (com limite por e-mail), tempo do modo offline de teste e tempo de bloqueio.
+## Administração e regras
+- O administrador tem um item próprio no menu ("Administração", abaixo de Configurações): empresas (criar, gerenciar, abrir, excluir), e-mails que podem criar empresas (com limite de empresas e de pessoas convidadas), e-mail do suporte, e o e-mail e o ID da própria conta (com botão Copiar).
+- Não existe modo sem conta: para usar o sistema é preciso entrar com o Dropbox e ter acesso a uma empresa.
 - As regras ficam em `Precifica_Admin/politica.json` (privado) e `publico.json` (só hashes dos e-mails), no Dropbox do administrador. O site lê o `publico.json` pelo link da variável `POLICY_URL` (gerado no painel).
 - O app pede a permissão `account_info.read` do Dropbox para ler o e-mail da conta (marque em Permissions no console do app e reconecte).
-- Limite: sem servidor não há bloqueio por IP nem proteção contra quem edita o código; o bloqueio vale para o aparelho/navegador.
-
-
+- Limite: sem servidor não há proteção contra quem edita o código; a proteção real é a permissão da pasta no Dropbox.
