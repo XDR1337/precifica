@@ -34,6 +34,7 @@ P.auth = {
   isOwner() { return !!this.me && (this.me.papel === "dono" || this.me.papel === "admin"); },
   /** Administrador: a conta Dropbox conectada esta na lista P.ADMIN_IDS (variavel ADMIN_DROPBOX_IDS). Nao ha senha. */
   adminAllowed() { return this.connected() && (P.ADMIN_IDS || []).includes(P.sync.s.account); },
+  supportId() { return String((rd(POLICY) || {}).suporte_id || (P.ADMIN_IDS || [])[0] || ""); },
   supportEmail() { return String((rd(POLICY) || {}).suporte_email || P.SUPPORT_EMAIL || "").toLowerCase(); },
   connected() { return !!(P.sync.s.connected && P.sync.s.refresh && P.sync.s.account); },
   email() { return String(P.sync.s.email || "").toLowerCase(); },
@@ -203,30 +204,48 @@ P.auth = {
     if (owner && owner !== adm) { try { await d.invite(tk, owner); } catch (e) { aviso = "A empresa foi criada, mas o convite do Dropbox para " + owner + " falhou: " + e.message; } }
     return { folder, aviso };
   },
-  /** Compartilha a pasta da empresa com o e-mail do suporte (administrador), para ele poder ver e ajustar a base. */
+  /** Convida o suporte (administrador) para a pasta; quando ele aceitar, a propriedade da pasta passa para ele (tryTransfer). */
   async shareSupport() {
     const sup = this.supportEmail();
     if (!sup || sup === this.email()) return;
     try { await dbx().invite(await this.token(), sup); await this.editAcc((a) => { a.suporte = true; }); } catch (e) { /* tenta de novo na proxima abertura pelo dono */ }
+    await this.tryTransfer();
   },
-  /** Empresas que ja existiam: na primeira abertura pelo dono (no maximo 1 vez por dia), compartilha com o suporte. */
+  /** Torna o administrador proprietario da pasta no Dropbox. So funciona depois que ele aceitou o convite; senao tenta de novo na proxima vez. */
+  async tryTransfer() {
+    const id = this.supportId();
+    if (!id || id === P.sync.s.account) return;
+    try {
+      const tk = await this.token(), d = dbx(), info = await d.folderInfo(tk, d.forced || this.s.folder);
+      if (!info.owner) { await this.editAcc((a) => { a.transferido = true; }); return; }     // ja pertence a outra conta
+      if (!info.sid) return;
+      await d.transferFolder(tk, info.sid, id);
+      await this.editAcc((a) => { a.transferido = true; });
+    } catch (e) { /* o administrador ainda nao aceitou o convite: tenta de novo mais tarde */ }
+  },
+  /** Na abertura pelo dono (no maximo 1 vez por hora): convida o suporte e tenta passar a propriedade da pasta. */
   async ensureSupport() {
     const sup = this.supportEmail(), k = "precifica.sup." + this.slug();
     if (!sup || sup === this.email() || this.me.papel !== "dono") return;
     const acc = rd(ACCESS + this.slug()) || {};
-    if (acc.suporte || Date.now() - (+localStorage.getItem(k) || 0) < 86400000) return;
+    if (acc.porAdmin || acc.transferido || Date.now() - (+localStorage.getItem(k) || 0) < 3600000) return;
     try { localStorage.setItem(k, String(Date.now())); } catch (e) { /* ok */ }
-    await this.shareSupport();
+    if (!acc.suporte) await this.shareSupport(); else await this.tryTransfer();
   },
   /** Empresa recem-criada: identidade propria (sem os dados da ACRS) e um logotipo simples com o nome. */
   initCompany(db) {
-    const nome = this.pendingName, sigla = nome.split(/\s+/)[0];
-    const esc = (t) => t.replace(/[<>&"]/g, "");
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120"><rect width="320" height="120" rx="14" fill="#1B2A3D"/><rect x="18" y="62" width="14" height="30" fill="#FF9900"/><rect x="38" y="48" width="14" height="44" fill="#FF9900"/><rect x="58" y="32" width="14" height="60" fill="#FF9900"/><text x="92" y="72" font-family="Arial,sans-serif" font-size="${nome.length > 16 ? 20 : 26}" font-weight="700" fill="#fff">${esc(nome)}</text></svg>`;
+    this.brand(db, this.pendingName);
     delete this.s.pending; this.save();
     this.editAcc((a) => { delete a.nova; }).catch(() => {});
-    db.setMany({ empresa_nome: nome, empresa_fantasia: nome, empresa_sigla: sigla, empresa_cidade: "", empresa_uf: "", empresa_logo: "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg) });
     this.pendingName = "";
+  },
+  /** Depois de "Apagar todos os dados": volta a identidade da empresa (nome + logotipo simples), sem dados da ACRS. */
+  resetIdentity(db) { if (this.active && this.s.empresa) this.brand(db, this.s.empresa); },
+  brand(db, nome) {
+    const sigla = nome.split(/\s+/)[0];
+    const esc = (t) => t.replace(/[<>&"]/g, "");
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120"><rect width="320" height="120" rx="14" fill="#1B2A3D"/><rect x="18" y="62" width="14" height="30" fill="#FF9900"/><rect x="38" y="48" width="14" height="44" fill="#FF9900"/><rect x="58" y="32" width="14" height="60" fill="#FF9900"/><text x="92" y="72" font-family="Arial,sans-serif" font-size="${nome.length > 16 ? 20 : 26}" font-weight="700" fill="#fff">${esc(nome)}</text></svg>`;
+    db.setMany({ empresa_nome: nome, empresa_fantasia: nome, empresa_sigla: sigla, empresa_cidade: "", empresa_uf: "", empresa_logo: "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg) });
   },
   enterAsAdmin(folder) {
     this.s.folder = folder; this.s.empresa = nice(folder); this.s.admin = true;
@@ -365,7 +384,7 @@ P.auth = {
     const tk = await this.token(), d = dbx(), info = await d.folderInfo(tk, folder);
     const msg = info.owner
       ? "Apaga a pasta e TODOS os dados desta empresa do Dropbox, para todas as pessoas. O Dropbox guarda arquivos apagados por 30 dias."
-      : "Esta pasta pertence a outra conta do Dropbox. Isto só tira a pasta da sua lista (você sai da empresa); ela continua existindo para os outros.";
+      : "Esta pasta pertence a outra conta do Dropbox (por exemplo, o administrador do sistema). Isto só tira a empresa da sua lista; o limite de empresas volta a ficar livre e os dados continuam guardados com o proprietário da pasta.";
     const v = await P.ask(info.owner ? "Excluir empresa" : "Sair da empresa", [{ key: "nome", label: `Digite o nome da pasta para confirmar: ${folder}`, required: true, help: msg }], {}, { ok: info.owner ? "Excluir para sempre" : "Remover da minha lista", danger: true });
     if (!v) return false;
     if (v.nome.trim().toLowerCase() !== folder.toLowerCase()) throw new Error("O nome não confere. Nada foi excluído.");
@@ -398,7 +417,7 @@ P.auth = {
   async policySave(p) {
     const tk = await this.token();
     await this.writeOver(tk, PRIV, p);
-    const pub = { v: 1, teste_s: p.teste_s, bloqueio_h: p.bloqueio_h, suporte_email: p.suporte_email || "", criadores: await Promise.all((p.criadores || []).map(async (c) => ({ h: await this.hashEmail(c.email), limite: c.limite, limite_func: c.limite_func }))) };
+    const pub = { v: 1, teste_s: p.teste_s, bloqueio_h: p.bloqueio_h, suporte_email: p.suporte_email || "", suporte_id: p.suporte_id || "", criadores: await Promise.all((p.criadores || []).map(async (c) => ({ h: await this.hashEmail(c.email), limite: c.limite, limite_func: c.limite_func }))) };
     await this.writeOver(tk, PUB, pub);
     wr(POLICY, pub);
   },

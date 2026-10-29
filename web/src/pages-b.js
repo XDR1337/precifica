@@ -399,7 +399,9 @@ P.definePage("Configurações", {
   async apagar(pg) {
     if (await P.confirm("Apagar todos os dados", "Todos os cadastros, propostas e configurações serão apagados (um backup é baixado antes). Tem certeza?", "Apagar tudo", true)) {
       download(`precifica_antes_de_apagar_${P.todayISO().replace(/-/g, "")}.json`, pg.db.exportData());
-      pg.db.resetAll(); P.app.changed("Dados apagados");
+      pg.db.resetAll();
+      P.auth.resetIdentity(pg.db);                       // empresa: so o nome (com logotipo simples), sem dados nem logo da ACRS
+      P.app.changed("Dados apagados");
     }
   },
   async importar(pg) {

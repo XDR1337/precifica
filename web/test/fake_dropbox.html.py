@@ -26,6 +26,8 @@ FAKE = r"""<script>
   if(ep==="sharing/add_folder_member"){const l=JSON.parse(localStorage.fakeinv||"[]"); l.push(body.members[0].member.email); localStorage.fakeinv=JSON.stringify(l); return J({});}
   if(ep==="sharing/get_folder_metadata"){const k=Object.keys(d.folders).find(x=>d.folders[x].sid===body.shared_folder_id); return J({access_type:{".tag":(k&&d.folders[k].member)?"editor":"owner"}});}
   if(ep==="sharing/relinquish_folder_membership"&&localStorage.fakeowner==="1") return new Response('{"error":{".tag":"folder_owner"},"error_summary":"folder_owner/"}',{status:409});
+  if(ep==="sharing/transfer_folder"){const l=JSON.parse(localStorage.faketransfer||"[]"); l.push(body.to_dropbox_id); localStorage.faketransfer=JSON.stringify(l); return J({});}
+  if(ep==="sharing/mount_folder"){const p=JSON.parse(localStorage.fakepend||"[]"); const e=p.find(x=>x.shared_folder_id===body.shared_folder_id); localStorage.fakepend=JSON.stringify(p.filter(x=>x!==e)); localStorage.fakemounted=(localStorage.fakemounted||"")+body.shared_folder_id+","; return J({path_display:"/"+(e?e.name:"x")});}
   if(ep==="sharing/unshare_folder"){localStorage.fakepend="[]"; return J({".tag":"async_job_id",async_job_id:"j1"});}
   if(ep==="sharing/check_job_status") return J({".tag":"complete"});
   if(ep==="sharing/relinquish_folder_membership"){localStorage.fakepend=JSON.stringify(JSON.parse(localStorage.fakepend||"[]").filter(e=>e.shared_folder_id!==body.shared_folder_id)); const k=Object.keys(d.folders).find(x=>d.folders[x].sid===body.shared_folder_id); if(k) delete d.folders[k]; S(d); return J({});}

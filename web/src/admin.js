@@ -18,7 +18,16 @@ P.definePage("Administração", {
     const box = h("div", { class: "adm-rows" }, h("p", { class: "fh", text: "Carregando…" }));
     const drawCompanies = async () => {
       let list = [];
-      try { list = await dbx().listCompanies(await A.token()); } catch (e) { box.replaceChildren(h("p", { class: "fh", text: "Não foi possível listar: " + e.message })); return; }
+      try {
+        const tk = await A.token();
+        list = await dbx().listCompanies(tk);
+        const ign = (() => { try { return JSON.parse(localStorage.getItem("precifica.admin.ign") || "[]"); } catch (e) { return []; } })();
+        const novos = list.filter((c) => c.pending && c.sid && !ign.includes(c.name.toLowerCase()));
+        if (novos.length && A.supportEmail()) {                       // convites dos clientes para o suporte: aceita sozinho (os que voce recusou ficam de fora)
+          for (const c of novos) await dbx().rpc("sharing/mount_folder", tk, { shared_folder_id: c.sid });
+          list = await dbx().listCompanies(tk);
+        }
+      } catch (e) { box.replaceChildren(h("p", { class: "fh", text: "Não foi possível listar: " + e.message })); return; }
       box.replaceChildren(...(list.length ? list.map((c) => h("div", { class: "auth-row" }, h("div", {}, h("b", { text: nice(c.name) }), h("span", { text: c.name + (c.pending ? " · convite novo" : "") })),
         h("div", { class: "bar" }, btn("Gerenciar", () => gerenciar(c), "primary xs"), btn("Abrir", () => A.enterAsAdmin(c.name), "secondary xs"), btn(c.pending ? "Recusar convite" : "Excluir", () => excluir(c), "danger xs")))) : [h("p", { class: "fh", text: "Nenhuma empresa encontrada. Cada empresa precisa compartilhar a pasta “Precifica-…” com a sua conta do Dropbox." })]));
     };
@@ -27,6 +36,7 @@ P.definePage("Administração", {
         if (c.pending && c.sid) {                       // convite que ainda nao foi aceito: recusa sem criar a pasta no seu Dropbox
           if (!(await P.confirm("Recusar convite", `A pasta “${c.name}” está aparecendo como um compartilhamento pendente. Se for de outra conta, o convite é recusado e a pasta dela não é apagada. Continuar?`, "Continuar", true))) return;
           const tk = await A.token();
+          try { const ig = JSON.parse(localStorage.getItem("precifica.admin.ign") || "[]"); ig.push(c.name.toLowerCase()); localStorage.setItem("precifica.admin.ign", JSON.stringify(ig)); } catch (e) { /* ok */ }
           try { await dbx().declineInvite(tk, c.sid); P.ui.toast("Convite recusado"); }
           catch (e) {
             if (!e.owner) throw e;
@@ -92,34 +102,41 @@ P.definePage("Administração", {
       try { pol = await A.policyRead(); } catch (e) { rulesBox.replaceChildren(h("p", { class: "fh", text: "Não foi possível carregar as regras: " + e.message })); return; }
       pol.criadores = pol.criadores || [];
       if (!fSup.value) fSup.value = pol.suporte_email || A.email() || "";
-      rulesBox.replaceChildren(...(pol.criadores.length ? pol.criadores.map((c) => h("div", { class: "auth-row" }, h("div", {}, h("b", { text: c.email }), h("span", { text: `Empresas: ${c.limite === 0 ? "sem limite" : c.limite} · Pessoas convidadas: ${c.limite_func === 0 ? "sem limite" : (c.limite_func === undefined ? 5 : c.limite_func)}` })),
-        h("div", { class: "bar" }, btn("Limite", async () => {
-          const v = await P.ask("Limites de " + c.email, [{ key: "limite", label: "Quantas empresas pode criar?", kind: "int", required: true, min: 0, help: "0 = sem limite." },
-            { key: "limite_func", label: "Quantas pessoas pode convidar?", kind: "int", required: true, min: 0, help: "Vale para todas as empresas criadas por este e-mail somadas. 0 = sem limite." }], { limite: c.limite, limite_func: c.limite_func === undefined ? 5 : c.limite_func }, { ok: "Salvar" });
-          if (v) { c.limite = Math.max(0, v.limite); c.limite_func = Math.max(0, v.limite_func); save("Limites atualizados"); }
+      const L = (v, def) => (v === 0 ? "sem limite" : v === undefined ? def : v);
+      rulesBox.replaceChildren(...(pol.criadores.length ? pol.criadores.map((c) => h("div", { class: "auth-row" }, h("div", {}, h("b", { text: c.nome || c.email }),
+        h("span", { text: c.nome ? c.email : "" }), c.celular ? h("span", { text: "Celular: " + c.celular }) : "",
+        h("span", { text: `Empresas: ${L(c.limite, 1)} · Pessoas convidadas: ${L(c.limite_func, 5)}` })),
+        h("div", { class: "bar" }, btn("Editar", async () => {
+          const v = await P.ask("Editar " + c.email, [{ key: "nome", label: "Nome", required: true }, { key: "celular", label: "Celular (opcional)", mode: "tel", help: "Com DDD. Só você vê." },
+            { key: "limite", label: "Quantas empresas pode criar?", kind: "int", required: true, min: 0, help: "0 = sem limite." },
+            { key: "limite_func", label: "Quantas pessoas pode convidar?", kind: "int", required: true, min: 0, help: "Vale para todas as empresas criadas por este e-mail somadas. 0 = sem limite." }],
+            { nome: c.nome || "", celular: c.celular || "", limite: c.limite, limite_func: c.limite_func === undefined ? 5 : c.limite_func }, { ok: "Salvar" });
+          if (v) { c.nome = v.nome.trim(); c.celular = (v.celular || "").trim(); c.limite = Math.max(0, v.limite); c.limite_func = Math.max(0, v.limite_func); save("Dados atualizados"); }
         }, "secondary xs"), btn("Remover", async () => {
-          if (await P.confirm("Remover e-mail", `Remover ${c.email}? Ele não poderá mais criar empresas (as que já existem continuam).`, "Remover", true)) { pol.criadores = pol.criadores.filter((x) => x !== c); save("E-mail removido"); }
+          if (await P.confirm("Remover e-mail", `Remover ${c.email}? Ele não poderá mais criar empresas e as empresas que ele criou ficam com o acesso encerrado.`, "Remover", true)) { pol.criadores = pol.criadores.filter((x) => x !== c); save("E-mail removido"); }
         }, "danger xs")))) : [h("p", { class: "fh", text: "Nenhum e-mail liberado ainda. Sem a lista, ninguém consegue criar empresas." })]));
     };
     drawRules();
     out.push(card(cardTitle("Quem pode criar empresas", "Só os e-mails desta lista criam empresas novas, cada um com o seu limite de empresas e de pessoas convidadas. Quem entra pelo convite de um dono usa a empresa dele sem precisar estar aqui."), rulesBox,
       h("div", { class: "bar" }, btn("+ Liberar e-mail", async () => {
-        const v = await P.ask("Liberar e-mail", [{ key: "email", label: "E-mail da conta Dropbox", required: true, mode: "email" }, { key: "limite", label: "Quantas empresas pode criar", kind: "int", min: 0, help: "0 = sem limite." },
+        const v = await P.ask("Liberar e-mail", [{ key: "nome", label: "Nome da pessoa ou empresa", required: true }, { key: "email", label: "E-mail da conta Dropbox", required: true, mode: "email" },
+          { key: "celular", label: "Celular (opcional)", mode: "tel", help: "Com DDD. Só você vê." },
+          { key: "limite", label: "Quantas empresas pode criar", kind: "int", min: 0, help: "0 = sem limite." },
           { key: "limite_func", label: "Quantas pessoas pode convidar", kind: "int", min: 0, help: "Somando todas as empresas dele. 0 = sem limite." }], { limite: 1, limite_func: 5 }, { ok: "Liberar" });
         if (!v) return;
         const em = v.email.trim().toLowerCase();
         if (!/^\S+@\S+\.\S+$/.test(em)) return P.info("E-mail inválido", "Confira o e-mail digitado.", "warn");
-        if (pol.criadores.some((c) => c.email === em)) return P.info("Já está na lista", "Use “Limite” para mudar o limite dele.", "warn");
-        pol.criadores.push({ email: em, limite: Math.max(0, v.limite), limite_func: Math.max(0, v.limite_func) }); save("E-mail liberado");
+        if (pol.criadores.some((c) => c.email === em)) return P.info("Já está na lista", "Use “Editar” para mudar os dados dele.", "warn");
+        pol.criadores.push({ nome: v.nome.trim(), email: em, celular: (v.celular || "").trim(), limite: Math.max(0, v.limite), limite_func: Math.max(0, v.limite_func) }); save("E-mail liberado");
       }))));
 
-    out.push(card(cardTitle("Suporte: acesso a todas as empresas", "Toda empresa criada passa a ser compartilhada com este e-mail. É assim que você vê, entra e edita a base de qualquer cliente em tempo real."),
+    out.push(card(cardTitle("Suporte: acesso a todas as empresas", "Quando um cliente cria uma empresa, este e-mail é convidado para a pasta e, depois que você aceitar o convite, passa a ser o proprietário dela no Dropbox. É assim que você vê, entra e edita a base de qualquer cliente."),
       P.field({ label: "E-mail do suporte (a sua conta do Dropbox)" }, fSup),
       h("div", { class: "bar" }, btn("Salvar e-mail do suporte", async () => {
         const em = fSup.value.trim().toLowerCase();
         if (!/^\S+@\S+\.\S+$/.test(em)) return P.info("E-mail inválido", "Confira o e-mail digitado.", "warn");
-        pol.suporte_email = em; save("E-mail do suporte salvo");
-      })), h("p", { class: "fh", text: "Empresas que já existem são compartilhadas com você na próxima vez que o dono abrir. Você também pode pedir para o dono usar “Compartilhar com o suporte”, ou convidar o seu e-mail pelo Dropbox." })));
+        pol.suporte_email = em; pol.suporte_id = P.sync.s.account || ""; save("E-mail do suporte salvo");
+      })), h("p", { class: "fh", text: "O convite chega ao seu Dropbox e este painel aceita sozinho os convites das empresas quando você abre a lista. A propriedade passa para você na próxima vez que o dono abrir a empresa (até 1 hora depois). Salve este e-mail estando conectado na conta que será a proprietária." })));
     // ---------------------------------------------------------------- publicar as regras
     const st = P.POLICY_URL ? "Ativa: o site já está lendo as regras acima." : "Ainda não ativada: sem o link, o site deixa todo mundo criar empresas e não aplica os limites.";
     out.push(card(cardTitle("Ativar as regras no site", st),

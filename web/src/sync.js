@@ -229,6 +229,11 @@ const dropbox = {
     if (!r.res.ok && /folder_owner/.test(r.text)) { const e = new Error("folder_owner"); e.owner = true; throw e; }
     if (!r.res.ok) throw new Error("O Dropbox não deixou recusar o convite por aqui. Recuse em dropbox.com › Compartilhado › Convites, ou peça a quem criou a pasta para remover a sua conta. " + (r.text || "").slice(0, 200));
   },
+  /** Transfere a propriedade da pasta compartilhada para outra conta (que ja precisa ser membro dela). */
+  async transferFolder(token, sid, toId) {
+    const r = await this.rpc("sharing/transfer_folder", token, { shared_folder_id: sid, to_dropbox_id: toId });
+    if (!r.res.ok) throw this.friendly(r.res, r.text);
+  },
   /** Pasta compartilhada que e' sua mas nao esta montada: encerra o compartilhamento e apaga a pasta. */
   async unshareAndDelete(token, sid, name) {
     const r = await this.rpc("sharing/unshare_folder", token, { shared_folder_id: sid, leave_a_copy: false });
