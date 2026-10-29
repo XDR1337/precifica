@@ -164,6 +164,7 @@ P.auth = {
     this.active = true;
     dbx().forced = this.s.folder; dbx().folderOk = null; dbx().basePath = null;
     wr(SES, this.me, sessionStorage);
+    const cached = rd(ACCESS + this.slug()); if (cached && cached.empresa) this.s.empresa = cached.empresa;   // nome sempre igual ao da empresa aberta
     delete this.s.choose; this.save();
     try {                                              // primeira vez neste aparelho: baixa a base da empresa antes de abrir
       const key = P.storeKey(this.slug());

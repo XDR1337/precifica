@@ -395,3 +395,6 @@ select.in{padding-right:8px}
 .trialchip button{border:0;background:#fff;color:#B45309;border-radius:999px;padding:4px 10px;font:inherit;font-size:12px;cursor:pointer}
 .adm-rows{display:flex;flex-direction:column;gap:8px}.adm-rows .auth-row{background:var(--card)}
 .adm-kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:6px}.adm-kv div{background:var(--bg);border-radius:8px;padding:8px 10px;min-width:0}.adm-kv span{display:block}.adm-kv b{display:block;overflow-wrap:anywhere;font-size:13px}
+
+/* rodape do menu: nome em cima, botoes embaixo (nao corta em telas estreitas) */
+.whoami{flex-direction:column;align-items:stretch;gap:6px}.whoami b,.whoami span{overflow-wrap:anywhere}.whoami .bar{justify-content:flex-start;flex-wrap:wrap;gap:6px}
