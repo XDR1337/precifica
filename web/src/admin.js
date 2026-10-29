@@ -25,9 +25,17 @@ P.definePage("Administração", {
     const excluir = async (c) => {
       try {
         if (c.pending && c.sid) {                       // convite que ainda nao foi aceito: recusa sem criar a pasta no seu Dropbox
-          if (!(await P.confirm("Recusar convite", `A pasta “${c.name}” é de outra conta do Dropbox, que convidou a sua. Recusar o convite não apaga a pasta de quem a criou. Continuar?`, "Recusar convite", true))) return;
-          await dbx().declineInvite(await A.token(), c.sid);
-          P.ui.toast("Convite recusado"); drawCompanies(); return;
+          if (!(await P.confirm("Recusar convite", `A pasta “${c.name}” está aparecendo como um compartilhamento pendente. Se for de outra conta, o convite é recusado e a pasta dela não é apagada. Continuar?`, "Continuar", true))) return;
+          const tk = await A.token();
+          try { await dbx().declineInvite(tk, c.sid); P.ui.toast("Convite recusado"); }
+          catch (e) {
+            if (!e.owner) throw e;
+            if (!(await P.confirm("A pasta é sua", `Você é o dono de “${c.name}”. Para fazê-la sumir, o compartilhamento será encerrado e a pasta apagada para todos que ainda a tenham (o Dropbox guarda arquivos apagados por 30 dias). Apagar?`, "Encerrar e apagar", true))) return;
+            const r = await dbx().unshareAndDelete(tk, c.sid, c.name);
+            P.ui.toast(r === "apagada" ? "Pasta apagada" : "Compartilhamento encerrado");
+            if (r !== "apagada") P.info("Falta um passo", "O compartilhamento foi encerrado, mas a pasta continua no seu Dropbox. Atualize a lista e toque em Excluir nela.", "warn");
+          }
+          drawCompanies(); return;
         }
         const r = await A.deleteCompany(c.name);
         if (r) { P.ui.toast(r === "apagada" ? "Empresa excluída" : "Pasta removida da sua lista"); drawCompanies(); }

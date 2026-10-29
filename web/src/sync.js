@@ -226,7 +226,23 @@ const dropbox = {
   /** Recusa o convite de uma pasta compartilhada que ainda nao foi aceita (sem montar a pasta no Dropbox). */
   async declineInvite(token, sid) {
     const r = await this.rpc("sharing/relinquish_folder_membership", token, { shared_folder_id: sid, leave_a_copy: false });
+    if (!r.res.ok && /folder_owner/.test(r.text)) { const e = new Error("folder_owner"); e.owner = true; throw e; }
     if (!r.res.ok) throw new Error("O Dropbox não deixou recusar o convite por aqui. Recuse em dropbox.com › Compartilhado › Convites, ou peça a quem criou a pasta para remover a sua conta. " + (r.text || "").slice(0, 200));
+  },
+  /** Pasta compartilhada que e' sua mas nao esta montada: encerra o compartilhamento e apaga a pasta. */
+  async unshareAndDelete(token, sid, name) {
+    const r = await this.rpc("sharing/unshare_folder", token, { shared_folder_id: sid, leave_a_copy: false });
+    if (!r.res.ok) throw this.friendly(r.res, r.text);
+    const job = r.j && (r.j.async_job_id || null);
+    for (let k = 0; job && k < 15; k++) {
+      await new Promise((x) => setTimeout(x, 800));
+      const st = await this.rpc("sharing/check_job_status", token, { async_job_id: job });
+      const tag = st.j && st.j[".tag"];
+      if (tag === "complete") break;
+      if (tag === "failed") throw new Error("O Dropbox não conseguiu encerrar o compartilhamento da pasta.");
+    }
+    const d = await this.rpc("files/delete_v2", token, { path: "/" + name });
+    return d.res.ok ? "apagada" : "descompartilhada";
   },
   async deleteFolder(token, name) {
     const r = await this.rpc("files/delete_v2", token, { path: "/" + name });
