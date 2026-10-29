@@ -383,7 +383,7 @@ P.auth = {
     this.useFolder(folder);
     const tk = await this.token(), d = dbx(), info = await d.folderInfo(tk, folder);
     const msg = info.owner
-      ? "Apaga a pasta e TODOS os dados desta empresa do Dropbox, para todas as pessoas. O Dropbox guarda arquivos apagados por 30 dias."
+      ? "Primeiro tira todas as pessoas da pasta no Dropbox e depois apaga a pasta e TODOS os dados desta empresa. O Dropbox guarda arquivos apagados por 30 dias."
       : "Esta pasta pertence a outra conta do Dropbox (por exemplo, o administrador do sistema). Isto só tira a empresa da sua lista; o limite de empresas volta a ficar livre e os dados continuam guardados com o proprietário da pasta.";
     const v = await P.ask(info.owner ? "Excluir empresa" : "Sair da empresa", [{ key: "nome", label: `Digite o nome da pasta para confirmar: ${folder}`, required: true, help: msg }], {}, { ok: info.owner ? "Excluir para sempre" : "Remover da minha lista", danger: true });
     if (!v) return false;

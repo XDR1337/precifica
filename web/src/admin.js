@@ -29,7 +29,7 @@ P.definePage("Administração", {
         }
       } catch (e) { box.replaceChildren(h("p", { class: "fh", text: "Não foi possível listar: " + e.message })); return; }
       box.replaceChildren(...(list.length ? list.map((c) => h("div", { class: "auth-row" }, h("div", {}, h("b", { text: nice(c.name) }), h("span", { text: c.name + (c.pending ? " · convite novo" : "") })),
-        h("div", { class: "bar" }, btn("Gerenciar", () => gerenciar(c), "primary xs"), btn("Abrir", () => A.enterAsAdmin(c.name), "secondary xs"), btn(c.pending ? "Recusar convite" : "Excluir", () => excluir(c), "danger xs")))) : [h("p", { class: "fh", text: "Nenhuma empresa encontrada. Cada empresa precisa compartilhar a pasta “Precifica-…” com a sua conta do Dropbox." })]));
+        h("div", { class: "bar" }, btn("Gerenciar", () => gerenciar(c), "primary xs"), c.pending ? null : btn("Backup", async () => { try { P.download(`precifica_${c.name}_${new Date().toISOString().slice(0, 10)}.json`, await A.companyBackup(c.name)); } catch (e) { err(e); } }, "secondary xs"), btn("Abrir", () => A.enterAsAdmin(c.name), "secondary xs"), btn(c.pending ? "Recusar convite" : "Excluir", () => excluir(c), "danger xs")))) : [h("p", { class: "fh", text: "Nenhuma empresa encontrada. Cada empresa precisa compartilhar a pasta “Precifica-…” com a sua conta do Dropbox." })]));
     };
     const excluir = async (c) => {
       try {

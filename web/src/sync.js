@@ -211,6 +211,32 @@ const dropbox = {
     if (sid) { const fm = await this.rpc("sharing/get_folder_metadata", token, { shared_folder_id: sid }); owner = fm.res.ok ? !!(fm.j.access_type && fm.j.access_type[".tag"] === "owner") : false; }
     return { path: this.basePath, sid, owner };
   },
+  /** Tira da pasta compartilhada todas as pessoas (membros e convites pendentes), menos o dono. Devolve quantas foram removidas. */
+  async removeAllMembers(token, sid) {
+    const alvos = [];
+    let r = await this.rpc("sharing/list_folder_members", token, { shared_folder_id: sid, limit: 200 });
+    if (!r.res.ok) throw this.friendly(r.res, r.text);
+    for (;;) {
+      for (const u of r.j.users || []) if (!(u.access_type && u.access_type[".tag"] === "owner") && u.user) alvos.push({ ".tag": "dropbox_id", dropbox_id: u.user.account_id });
+      for (const i of r.j.invitees || []) { const iv = i.invitee || {}; alvos.push(iv[".tag"] === "email" ? { ".tag": "email", email: iv.email } : { ".tag": "dropbox_id", dropbox_id: iv.dropbox_id }); }
+      if (!r.j.cursor) break;
+      r = await this.rpc("sharing/list_folder_members/continue", token, { cursor: r.j.cursor });
+      if (!r.res.ok) break;
+    }
+    let n = 0;
+    for (const member of alvos) {
+      const x = await this.rpc("sharing/remove_folder_member", token, { shared_folder_id: sid, member, leave_a_copy: false });
+      if (!x.res.ok) continue;                                   // uma pessoa que nao saiu nao impede as outras
+      n++;
+      const job = x.j && x.j.async_job_id;
+      for (let k = 0; job && k < 8; k++) {
+        await new Promise((t) => setTimeout(t, 600));
+        const st = await this.rpc("sharing/check_job_status", token, { async_job_id: job });
+        if (st.j && st.j[".tag"] !== "in_progress") break;
+      }
+    }
+    return n;
+  },
   /** Dono: apaga a pasta para todos. Quem nao e' dono: sai da pasta compartilhada (ela some so da lista dele). */
   async removeFolder(token, name) {
     const i = await this.folderInfo(token, name);
@@ -219,6 +245,7 @@ const dropbox = {
       if (!r.res.ok) throw this.friendly(r.res, r.text);
       return "saiu";
     }
+    if (i.sid) await this.removeAllMembers(token, i.sid);              // primeiro tira todas as pessoas da pasta, depois apaga
     const r = await this.rpc("files/delete_v2", token, { path: i.path });
     if (!r.res.ok) throw this.friendly(r.res, r.text);
     return "apagada";
