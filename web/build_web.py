@@ -67,7 +67,7 @@ def seed_js() -> str:
     return (f"P.SEED = {json.dumps(data, ensure_ascii=False, separators=(',', ':'))};\n"
             f"P.LOGO = {json.dumps(logo)};\n"
             f"P.SYNC_DROPBOX_KEY = {json.dumps(dropbox_key())};\n"
-            f"P.SYNC_DROPBOX_FOLDER = {json.dumps(dropbox_folder())};\n"
+            'P.SYNC_DROPBOX_FOLDER = "";\n'   # a pasta unica (Precifica-Equipe) nao e mais usada: cada empresa tem a sua
             f"P.ADMIN_IDS = {json.dumps([x.strip() for x in _cfg('admin_ids.txt', 'PRECIFICA_ADMIN_IDS').replace(chr(10), ',').split(',') if x.strip()])};\n"
             f"P.POLICY_URL = {json.dumps(_cfg('policy_url.txt', 'PRECIFICA_POLICY_URL'))};\n"
             f"P.SUPPORT_EMAIL = {json.dumps(_cfg('support_email.txt', 'PRECIFICA_SUPPORT_EMAIL'))};\n"

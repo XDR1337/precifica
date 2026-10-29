@@ -296,6 +296,15 @@ P.auth = {
     if (!this.s.kick) P.sync.disconnect();
     location.reload();
   },
+  /** A empresa deixou de existir: esquece a pasta e a copia do acesso, para o app nao tentar abri-la de novo. */
+  forget(msg) {
+    const slug = this.slug();
+    try { localStorage.removeItem(ACCESS + slug); } catch (e) { /* ok */ }
+    this.s.folder = ""; this.s.kick = msg; this.save();
+    P.app.db && (P.app.db.persistent = false);
+    try { localStorage.removeItem(P.storeKey(slug)); } catch (e) { /* ok */ }
+    this.leave(true);
+  },
   /** Volta para a lista de empresas (administrador: painel; demais: escolher a empresa). */
   switchCompany() {
     this.s.folder = ""; this.s.admin = false; if (!this.isAdmin()) this.s.choose = true; this.save();

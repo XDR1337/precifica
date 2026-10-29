@@ -127,10 +127,18 @@ const dropbox = {
     await this.checkFolder(token);
     const res = await this.call("https://content.dropboxapi.com/2/files/download", token, { path: this.filePath() });
     this.rev = null;
-    if (res.status === 409) return null;               // o arquivo ainda nao existe
+    if (res.status === 409) { await this.verifyFolder(token); return null; }   // o arquivo ainda nao existe (mas a pasta tem que existir)
     if (!res.ok) throw this.friendly(res, await res.text());
     try { this.rev = JSON.parse(res.headers.get("dropbox-api-result")).rev || null; } catch (e) { /* sem rev: grava por cima */ }
     return JSON.parse(await res.text());
+  },
+  /** Se a pasta da empresa foi apagada, o upload a recriaria sozinho (o Dropbox cria as pastas que faltam). Confere antes de gravar. */
+  async verifyFolder(token) {
+    if (!this.basePath) return;
+    const m = await this.rpc("files/get_metadata", token, { path: this.basePath });
+    if (m.res.ok) return;
+    this.folderOk = null; this.basePath = null;
+    await this.checkFolder(token);                       // lanca "A pasta ... nao foi encontrada" se realmente nao existe
   },
   async write(token, data) {
     // so grava se ninguem alterou o arquivo desde a leitura (evita sobrescrever o trabalho de outra pessoa)
@@ -156,7 +164,7 @@ const dropbox = {
   },
   async getJson(token, path) {
     const res = await this.call("https://content.dropboxapi.com/2/files/download", token, { path });
-    if (res.status === 409) return null;
+    if (res.status === 409) { if (this.basePath && path.toLowerCase().startsWith(this.basePath.toLowerCase() + "/")) await this.verifyFolder(token); return null; }
     if (!res.ok) throw this.friendly(res, await res.text());
     let rev = null; try { rev = JSON.parse(res.headers.get("dropbox-api-result")).rev || null; } catch (e) { /* ok */ }
     return { data: JSON.parse(await res.text()), rev };
@@ -366,7 +374,7 @@ P.sync = {
       else if (interactive) P.ui.toast("Sincronizado com o " + p.name);
     } catch (e) {
       if (e.auth || e.message === "auth") { this.set("auth"); if (interactive) P.ui.toast("Faça login novamente", "warn"); }
-      else if (P.auth && P.auth.active && !P.auth.isAdmin() && this.s.last && /A pasta “.*” não foi encontrada/.test(e.message)) { P.auth.s.kick = "Esta empresa não existe mais (foi excluída)."; P.auth.leave(true); }
+      else if (P.auth && P.auth.active && !P.auth.isAdmin() && this.s.last && /A pasta “.*” não foi encontrada/.test(e.message)) { P.auth.forget("Esta empresa não existe mais (foi excluída)."); }
       else if (!navigator.onLine || e.message === "offline" || /Failed to fetch|NetworkError|Load failed/i.test(e.message)) this.set("offline");
       else { this.set("error", e.message); if (interactive) throw e; }
     } finally {
