@@ -14,7 +14,6 @@ const SES = "precifica.auth.me";                 // nesta aba: quem esta logado
 const ACCESS = "precifica.acesso.v2.";           // copia local do arquivo de acesso (entrar sem internet)
 const FILE = "precifica-acesso.json";
 const POLICY = "precifica.policy.v1";
-const PRIV = "/Precifica_Admin/politica.json", PUB = "/Precifica_Admin/publico.json";   // regras do sistema (privada com e-mails / publica so com hashes)
 const DEF_FUNC = 5;                               // limite padrao de pessoas convidadas por criador
 const rd = (k, st = localStorage) => { try { return JSON.parse(st.getItem(k) || "null"); } catch (e) { return null; } };
 const wr = (k, v, st = localStorage) => { try { st.setItem(k, JSON.stringify(v)); } catch (e) { /* ok */ } };
@@ -35,6 +34,8 @@ P.auth = {
   /** Administrador: a conta Dropbox conectada esta na lista P.ADMIN_IDS (variavel ADMIN_DROPBOX_IDS). Nao ha senha. */
   adminAllowed() { return this.connected() && (P.ADMIN_IDS || []).includes(P.sync.s.account); },
   supportId() { return String((rd(POLICY) || {}).suporte_id || (P.ADMIN_IDS || [])[0] || ""); },
+  /** E-mails de todos os administradores que recebem acesso as empresas (o primeiro e' o do suporte, que tambem recebe a propriedade da pasta). */
+  supportEmails() { const p = rd(POLICY) || {}; return (p.suporte_emails && p.suporte_emails.length ? p.suporte_emails : [this.supportEmail()]).map((e) => String(e).toLowerCase()).filter(Boolean); },
   supportEmail() { return String((rd(POLICY) || {}).suporte_email || P.SUPPORT_EMAIL || "").toLowerCase(); },
   connected() { return !!(P.sync.s.connected && P.sync.s.refresh && P.sync.s.account); },
   email() { return String(P.sync.s.email || "").toLowerCase(); },
@@ -203,11 +204,16 @@ P.auth = {
     if (owner && owner !== adm) { try { await d.invite(tk, owner); } catch (e) { aviso = "A empresa foi criada, mas o convite do Dropbox para " + owner + " falhou: " + e.message; } }
     return { folder, aviso };
   },
-  /** Convida o suporte (administrador) para a pasta; quando ele aceitar, a propriedade da pasta passa para ele (tryTransfer). */
+  /** Convida os administradores para a pasta; quando o do suporte aceitar, a propriedade da pasta passa para ele (tryTransfer). */
   async shareSupport() {
-    const sup = this.supportEmail();
-    if (!sup || sup === this.email()) return;
-    try { await dbx().invite(await this.token(), sup); await this.editAcc((a) => { a.suporte = true; }); } catch (e) { /* tenta de novo na proxima abertura pelo dono */ }
+    const cache = rd(ACCESS + this.slug()) || {};
+    const conv = cache.admins_conv || (cache.suporte ? [this.supportEmail()] : []);
+    const faltam = this.supportEmails().filter((e) => e !== this.email() && !conv.includes(e));
+    if (faltam.length) {
+      const ok = [];
+      for (const e of faltam) { try { await dbx().invite(await this.token(), e); ok.push(e); } catch (x) { /* tenta de novo na proxima abertura pelo dono */ } }
+      if (ok.length) { try { await this.editAcc((a) => { a.suporte = true; a.admins_conv = [...new Set([...(a.admins_conv || conv), ...ok])]; }); } catch (e) { /* ok */ } }
+    }
     await this.tryTransfer();
   },
   /** Torna o administrador proprietario da pasta no Dropbox. So funciona depois que ele aceitou o convite; senao tenta de novo na proxima vez. */
@@ -222,14 +228,16 @@ P.auth = {
       await this.editAcc((a) => { a.transferido = true; });
     } catch (e) { /* o administrador ainda nao aceitou o convite: tenta de novo mais tarde */ }
   },
-  /** Na abertura pelo dono (no maximo 1 vez por hora): convida o suporte e tenta passar a propriedade da pasta. */
+  /** Na abertura pelo dono (no maximo 1 vez por hora): convida os administradores que faltam e tenta passar a propriedade da pasta. */
   async ensureSupport() {
     const sup = this.supportEmail(), k = "precifica.sup." + this.slug();
-    if (!sup || sup === this.email() || this.me.papel !== "dono") return;
+    if (!sup || this.me.papel !== "dono") return;
     const acc = rd(ACCESS + this.slug()) || {};
-    if (acc.porAdmin || acc.transferido || Date.now() - (+localStorage.getItem(k) || 0) < 3600000) return;
+    const conv = acc.admins_conv || (acc.suporte ? [sup] : []);
+    const tudo = this.supportEmails().filter((e) => e !== this.email()).every((e) => conv.includes(e));
+    if (acc.porAdmin || (acc.transferido && tudo) || Date.now() - (+localStorage.getItem(k) || 0) < 3600000) return;
     try { localStorage.setItem(k, String(Date.now())); } catch (e) { /* ok */ }
-    if (!acc.suporte) await this.shareSupport(); else await this.tryTransfer();
+    await this.shareSupport();
   },
   /** Empresa recem-criada: identidade propria (sem os dados da ACRS) e um logotipo simples com o nome. */
   initCompany(db) {
@@ -465,13 +473,17 @@ P.auth = {
   },
 
   // ---------------------------------------------------------------- regras do sistema (administrador)
+  /** Pasta das regras (compartilhada entre os administradores) e os dois arquivos dentro dela. */
+  async adminPaths(tk) { const dir = await dbx().adminDir(tk); return { dir, priv: dir + "/politica.json", pub: dir + "/publico.json" }; },
   async policyRead() {
-    const r = await dbx().getJson(await this.token(), PRIV);
-    return r ? r.data : { criadores: [], teste_s: 30, bloqueio_h: 5 };
+    const tk = await this.token(), r = await dbx().getJson(tk, (await this.adminPaths(tk)).priv);
+    const p = r ? r.data : { teste_s: 30, bloqueio_h: 5 };
+    for (const k of ["criadores", "admins", "ign", "acc"]) p[k] = p[k] || [];     // admins: outros administradores; ign/acc: convites de pastas recusados/aceitos (valem para todos os administradores)
+    return p;
   },
   async writeOver(tk, path, data) {
     const d = dbx();
-    await d.rpc("files/create_folder_v2", tk, { path: "/Precifica_Admin", autorename: false });      // ja existe? tudo bem
+    await d.rpc("files/create_folder_v2", tk, { path: path.slice(0, path.lastIndexOf("/")), autorename: false });      // ja existe? tudo bem
     for (let i = 0; ; i++) {
       const cur = await d.getJson(tk, path);
       try { await d.putJson(tk, path, data, cur ? cur.rev : null); return; } catch (e) { if (e.conflict && i < 4) continue; throw e; }
@@ -479,12 +491,30 @@ P.auth = {
   },
   async policySave(p) {
     const tk = await this.token();
-    await this.writeOver(tk, PRIV, p);
-    const pub = { v: 1, teste_s: p.teste_s, bloqueio_h: p.bloqueio_h, suporte_email: p.suporte_email || "", suporte_id: p.suporte_id || "", criadores: await Promise.all((p.criadores || []).map(async (c) => ({ h: await this.hashEmail(c.email), limite: c.limite, limite_func: c.limite_func }))) };
-    await this.writeOver(tk, PUB, pub);
+    const { priv, pub: pubPath } = await this.adminPaths(tk);
+    await this.writeOver(tk, priv, p);
+    const pub = { v: 1, teste_s: p.teste_s, bloqueio_h: p.bloqueio_h, suporte_email: p.suporte_email || "", suporte_id: p.suporte_id || "", suporte_emails: [...new Set([p.suporte_email, ...(p.admins || []).map((x) => x.email)].map((e) => String(e || "").trim().toLowerCase()).filter(Boolean))], criadores: await Promise.all((p.criadores || []).map(async (c) => ({ h: await this.hashEmail(c.email), limite: c.limite, limite_func: c.limite_func }))) };
+    await this.writeOver(tk, pubPath, pub);
     wr(POLICY, pub);
   },
-  async policyLink() { const tk = await this.token(); return dbx().publicLink(tk, PUB); },
+  async policyLink() { const tk = await this.token(); return dbx().publicLink(tk, (await this.adminPaths(tk)).pub); },
+  /** Deixa todos os administradores na mesma situacao: a pasta de regras e todas as empresas compartilhadas com cada um (como editores). */
+  async syncAdmins() {
+    const tk = await this.token(), d = dbx(), p = await this.policyRead(), eu = this.email(), erros = [];
+    const emails = [...new Set((p.admins || []).map((x) => String(x.email || "").toLowerCase()))].filter((e) => e && e !== eu);
+    if (!emails.length) return { resumo: "Nenhum outro administrador cadastrado.", erros };
+    const { dir } = await this.adminPaths(tk);
+    await d.rpc("files/create_folder_v2", tk, { path: dir, autorename: false });
+    const alvo = [{ nome: "Regras do sistema", path: dir }];
+    for (const c of await d.listCompanies(tk)) { if (c.pending) continue; try { alvo.push({ nome: c.name, path: await d.locate(tk, c.name) }); } catch (e) { /* sem acesso */ } }
+    let novos = 0;
+    for (const t of alvo) {
+      let ja = new Set();
+      try { ja = (await d.memberEmails(tk, t.path)).emails; } catch (e) { /* nao conseguiu ler: tenta convidar mesmo assim */ }
+      for (const em of emails) if (!ja.has(em)) { try { await d.shareFolderPath(tk, t.path, em); novos++; } catch (e) { erros.push(`${t.nome} → ${em}: ${String(e.message).slice(0, 90)}`); } }
+    }
+    return { resumo: `${novos} convite(s) novo(s) em ${alvo.length} pasta(s).` + (erros.length ? " Falhas: " + erros.join("; ") : ""), erros };
+  },
 
   // ---------------------------------------------------------------- telas
   setBusy(msg) { this.busy = msg; this.view(); },

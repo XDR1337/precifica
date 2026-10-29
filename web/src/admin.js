@@ -16,21 +16,25 @@ P.definePage("Administração", {
 
     // ---------------------------------------------------------------- empresas
     const box = h("div", { class: "adm-rows" }, h("p", { class: "fh", text: "Carregando…" }));
-    // shortcut: a lista de convites recusados fica so neste aparelho; trocar de aparelho mostra o convite de novo ate ser recusado la tambem
-    const lista = (k) => { try { return JSON.parse(localStorage.getItem(k) || "[]"); } catch (e) { return []; } };
-    const ignorados = () => lista("precifica.admin.ign"), aceitos = () => lista("precifica.admin.acc");
-    const guarda = (k, nome) => { try { const l = lista(k); if (!l.includes(nome)) { l.push(nome); localStorage.setItem(k, JSON.stringify(l)); } } catch (e) { /* ok */ } };
+    // aceita antes de tudo o convite da pasta de regras enviado por outro administrador (assim todos leem e gravam o mesmo estado)
+    const prep = A.token().then((tk) => dbx().acceptAdminDir(tk)).catch(() => {});
+    // convites recusados/aceitos ficam no arquivo de regras compartilhado: valem para todos os administradores
+    let estado = { ign: [], acc: [] };
+    const carregaEstado = async () => { try { const p = await A.policyRead(); estado = { ign: p.ign, acc: p.acc }; } catch (e) { /* sem estado: lista vazia */ } };
+    const guarda = async (k, nome) => { try { const p = await A.policyRead(); if (!p[k].includes(nome)) { p[k].push(nome); await A.policySave(p); } estado[k] = p[k]; } catch (e) { /* ok */ } };
+    const ignorados = () => estado.ign, aceitos = () => estado.acc;
     const drawCompanies = async () => {
       let list = [];
       try {
+        await prep; await carregaEstado();
         const tk = await A.token();
         list = await dbx().listCompanies(tk);
         const ign = ignorados(), ja = aceitos();
         // convite que este painel ja aceitou e voltou a ficar pendente = a pasta foi apagada aqui: recusa de vez (senao o Dropbox continua oferecendo)
-        for (const c of list.filter((x) => x.pending && x.sid && ja.includes(x.name.toLowerCase()))) { try { await dbx().declineInvite(tk, c.sid); } catch (e) { /* dono da pasta ou erro: ao menos some do painel */ } guarda("precifica.admin.ign", c.name.toLowerCase()); }
+        for (const c of list.filter((x) => x.pending && x.sid && ja.includes(x.name.toLowerCase()))) { try { await dbx().declineInvite(tk, c.sid); } catch (e) { /* dono da pasta ou erro: ao menos some do painel */ } await guarda("ign", c.name.toLowerCase()); }
         const novos = list.filter((c) => c.pending && c.sid && !ja.includes(c.name.toLowerCase()) && !ign.includes(c.name.toLowerCase()));
         if (novos.length && A.supportEmail()) {                       // convites dos clientes para o suporte: aceita uma vez so (os recusados ou ja aceitos antes ficam de fora)
-          for (const c of novos) { await dbx().rpc("sharing/mount_folder", tk, { shared_folder_id: c.sid }); guarda("precifica.admin.acc", c.name.toLowerCase()); }
+          for (const c of novos) { await dbx().rpc("sharing/mount_folder", tk, { shared_folder_id: c.sid }); await guarda("acc", c.name.toLowerCase()); }
           list = await dbx().listCompanies(tk);
         }
       } catch (e) { box.replaceChildren(h("p", { class: "fh", text: "Não foi possível listar: " + e.message })); return; }
@@ -43,7 +47,7 @@ P.definePage("Administração", {
         if (c.pending && c.sid) {                       // convite que ainda nao foi aceito: recusa sem criar a pasta no seu Dropbox
           if (!(await P.confirm("Recusar convite", `A pasta “${c.name}” está aparecendo como um compartilhamento pendente. Se for de outra conta, o convite é recusado e a pasta dela não é apagada. Continuar?`, "Continuar", true))) return;
           const tk = await A.token();
-          guarda("precifica.admin.ign", c.name.toLowerCase());
+          await guarda("ign", c.name.toLowerCase());
           try { await dbx().declineInvite(tk, c.sid); P.ui.toast("Convite recusado"); }
           catch (e) {
             if (!e.owner) { P.info("Convite ocultado", "O Dropbox não deixou recusar por aqui, mas o convite foi ocultado deste painel e não será aceito sozinho. Para sumir de vez, recuse em dropbox.com › Compartilhado, ou peça a quem criou a pasta para remover a sua conta.", "warn"); drawCompanies(); return; }
@@ -55,7 +59,7 @@ P.definePage("Administração", {
           drawCompanies(); return;
         }
         const r = await A.deleteCompany(c.name);
-        if (r) { guarda("precifica.admin.ign", c.name.toLowerCase()); P.ui.toast(r === "apagada" ? "Empresa excluída" : "Pasta removida da sua lista"); drawCompanies(); }
+        if (r) { await guarda("ign", c.name.toLowerCase()); P.ui.toast(r === "apagada" ? "Empresa excluída" : "Pasta removida da sua lista"); drawCompanies(); }
       } catch (e) { err(e); }
     };
     const when = (t) => (t ? new Date(t).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—");
@@ -103,12 +107,25 @@ P.definePage("Administração", {
     // ---------------------------------------------------------------- regras (e-mails + teste)
     const rulesBox = h("div", { class: "adm-rows" }, h("p", { class: "fh", text: "Carregando…" }));
     const fSup = h("input", { class: "in", type: "text", inputmode: "email", autocomplete: "off", placeholder: "e-mail do seu Dropbox" });
-    let pol = { criadores: [], teste_s: 30, bloqueio_h: 5 };
+    let pol = { criadores: [], admins: [], ign: [], acc: [], teste_s: 30, bloqueio_h: 5 };
+    const admBox = h("div", { class: "adm-rows" });
+    const drawAdmins = () => {
+      const eu = (A.email() || "").toLowerCase();
+      admBox.replaceChildren(h("div", { class: "auth-row" }, h("div", {}, h("b", { text: eu || "Você" }), h("span", { text: "Você (esta conta)" }))),
+        ...(pol.admins || []).filter((x) => String(x.email).toLowerCase() !== eu).map((x) => h("div", { class: "auth-row" }, h("div", {}, h("b", { text: x.email }), h("span", { text: "Administrador" })),
+          btn("Remover", async () => { if (await P.confirm("Remover administrador", `Remover ${x.email} da lista? Ele deixa de receber novas empresas. Para tirar o acesso que ele já tem, remova-o das pastas no Dropbox e tire o ID dele da variável ADMIN_DROPBOX_IDS.`, "Remover", true)) { pol.admins = pol.admins.filter((y) => y !== x); save("Administrador removido"); } }, "danger xs"))));
+    };
+    const runSync = async (mostrar) => {
+      try { const r = await A.syncAdmins(); if (mostrar) P.info("Administradores sincronizados", r.resumo, r.erros.length ? "warn" : "ok"); }
+      catch (e) { if (mostrar) err(e); }
+    };
     const save = async (msg) => { try { await A.policySave(pol); P.ui.toast(msg || "Salvo"); drawRules(); } catch (e) { err(e); } };
     const drawRules = async () => {
-      try { pol = await A.policyRead(); } catch (e) { rulesBox.replaceChildren(h("p", { class: "fh", text: "Não foi possível carregar as regras: " + e.message })); return; }
+      try { await prep; pol = await A.policyRead(); } catch (e) { rulesBox.replaceChildren(h("p", { class: "fh", text: "Não foi possível carregar as regras: " + e.message })); return; }
       pol.criadores = pol.criadores || [];
       if (!fSup.value) fSup.value = pol.suporte_email || A.email() || "";
+      drawAdmins();
+      if ((pol.admins || []).length && Date.now() - (+localStorage.getItem("precifica.admin.sync") || 0) > 600000) { try { localStorage.setItem("precifica.admin.sync", String(Date.now())); } catch (e) { /* ok */ } runSync(false); }
       const L = (v, def) => (v === 0 ? "sem limite" : v === undefined ? def : v);
       rulesBox.replaceChildren(...(pol.criadores.length ? pol.criadores.map((c) => h("div", { class: "auth-row" }, h("div", {}, h("b", { text: c.nome || c.email }),
         h("span", { text: c.nome ? c.email : "" }), c.celular ? h("span", { text: "Celular: " + c.celular }) : "",
@@ -137,6 +154,18 @@ P.definePage("Administração", {
         pol.criadores.push({ nome: v.nome.trim(), email: em, celular: (v.celular || "").trim(), limite: Math.max(0, v.limite), limite_func: Math.max(0, v.limite_func) }); save("E-mail liberado");
       }))));
 
+    out.push(card(cardTitle("Administradores", "Todos os administradores enxergam as mesmas empresas e usam as mesmas regras (e-mails liberados, limites e convites recusados)."), admBox,
+      h("div", { class: "bar" }, btn("+ Adicionar administrador", async () => {
+        const v = await P.ask("Adicionar administrador", [{ key: "email", label: "E-mail da conta Dropbox do administrador", required: true, mode: "email", help: "Ele recebe as pastas por convite e este painel as aceita sozinho. Depois coloque o ID dele em ADMIN_DROPBOX_IDS (GitHub) e rode o deploy." }], {}, { ok: "Adicionar" });
+        if (!v) return;
+        const em = v.email.trim().toLowerCase();
+        if (!/^\S+@\S+\.\S+$/.test(em)) return P.info("E-mail inválido", "Confira o e-mail digitado.", "warn");
+        if ((pol.admins || []).some((x) => String(x.email).toLowerCase() === em)) return P.info("Já está na lista", "Esse administrador já foi adicionado.", "warn");
+        const eu = (A.email() || "").toLowerCase();
+        pol.admins = [...(pol.admins || []), ...(eu && !(pol.admins || []).some((x) => String(x.email).toLowerCase() === eu) ? [{ email: eu }] : []), { email: em }];
+        try { await A.policySave(pol); await runSync(true); drawRules(); } catch (e) { err(e); }
+      }), btn("Sincronizar agora", () => runSync(true), "secondary")),
+      h("p", { class: "fh", text: "A sincronização compartilha a pasta de regras e todas as empresas com os outros administradores. Quem já tem acesso não é convidado de novo." })));
     out.push(card(cardTitle("Suporte: acesso a todas as empresas", "Quando um cliente cria uma empresa, este e-mail é convidado para a pasta e, depois que você aceitar o convite, passa a ser o proprietário dela no Dropbox. É assim que você vê, entra e edita a base de qualquer cliente."),
       P.field({ label: "E-mail do suporte (a sua conta do Dropbox)" }, fSup),
       h("div", { class: "bar" }, btn("Salvar e-mail do suporte", async () => {

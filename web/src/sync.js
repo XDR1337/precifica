@@ -189,11 +189,15 @@ const dropbox = {
   /** Convida uma pessoa (e-mail do Dropbox) para a pasta da empresa, como editora. */
   async invite(token, email) {
     await this.checkFolder(token);
+    return this.shareFolderPath(token, this.basePath, email);
+  },
+  /** Convida uma pessoa (e-mail) para a pasta compartilhada em `path` (compartilha a pasta antes, se preciso). Quem ja e' membro nao e' erro. */
+  async shareFolderPath(token, path, email) {
     let id = null;
-    const meta = await this.rpc("files/get_metadata", token, { path: this.basePath });
+    const meta = await this.rpc("files/get_metadata", token, { path });
     if (meta.res.ok && meta.j.sharing_info && meta.j.sharing_info.shared_folder_id) id = meta.j.sharing_info.shared_folder_id;
     if (!id) {
-      const sh = await this.rpc("sharing/share_folder", token, { path: this.basePath, acl_update_policy: "editors", member_policy: "anyone", force_async: false });
+      const sh = await this.rpc("sharing/share_folder", token, { path, acl_update_policy: "editors", member_policy: "anyone", force_async: false });
       if (!sh.res.ok) throw this.friendly(sh.res, sh.text);
       id = sh.j.shared_folder_id || null;
       for (let k = 0; !id && sh.j.async_job_id && k < 10; k++) {
@@ -205,7 +209,39 @@ const dropbox = {
     }
     if (!id) throw new Error("Não foi possível compartilhar a pasta agora. Tente de novo.");
     const r = await this.rpc("sharing/add_folder_member", token, { shared_folder_id: id, quiet: false, members: [{ member: { ".tag": "email", email }, access_level: { ".tag": "editor" } }] });
-    if (!r.res.ok) throw this.friendly(r.res, r.text);
+    if (!r.res.ok && !/already|duplicate/i.test(r.text)) throw this.friendly(r.res, r.text);
+  },
+  /** E-mails de quem ja esta na pasta (membros e convites pendentes). */
+  async memberEmails(token, path) {
+    const emails = new Set();
+    const meta = await this.rpc("files/get_metadata", token, { path });
+    const sid = meta.res.ok && meta.j.sharing_info ? meta.j.sharing_info.shared_folder_id || null : null;
+    if (!sid) return { sid: null, emails };
+    let r = await this.rpc("sharing/list_folder_members", token, { shared_folder_id: sid, limit: 200 });
+    while (r.res.ok) {
+      for (const u of r.j.users || []) if (u.user && u.user.email) emails.add(String(u.user.email).toLowerCase());
+      for (const i of r.j.invitees || []) if (i.invitee && i.invitee.email) emails.add(String(i.invitee.email).toLowerCase());
+      if (!r.j.cursor) break;
+      r = await this.rpc("sharing/list_folder_members/continue", token, { cursor: r.j.cursor });
+    }
+    return { sid, emails };
+  },
+  /** Pasta onde ficam as regras do sistema, compartilhada entre os administradores. Se outro administrador a compartilhou com voce, e' a compartilhada (pode ter sido montada com outro nome). */
+  async adminDir(token) {
+    if (this._adminDir) return this._adminDir;
+    let path = "/Precifica_Admin";
+    const l = await this.rpc("sharing/list_folders", token, {});
+    if (l.res.ok) { const f = (l.j.entries || []).find((e) => /^precifica_admin/i.test(e.name || "") && e.path_lower); if (f) path = f.path_lower; }
+    return (this._adminDir = path);
+  },
+  /** Aceita o convite da pasta de regras enviado por outro administrador (se houver). */
+  async acceptAdminDir(token) {
+    const m = await this.rpc("sharing/list_mountable_folders", token, {});
+    if (!m.res.ok) return false;
+    let ok = false;
+    for (const e of (m.j.entries || []).filter((x) => /^precifica_admin/i.test(x.name || ""))) { const r = await this.rpc("sharing/mount_folder", token, { shared_folder_id: e.shared_folder_id }); ok = ok || r.res.ok; }
+    if (ok) this._adminDir = null;
+    return ok;
   },
   /** Onde esta a pasta e quem e' o dono dela no Dropbox (so o dono apaga para todos; os demais apenas saem). */
   async folderInfo(token, name) {
