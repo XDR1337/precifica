@@ -96,6 +96,11 @@ const dropbox = {
     const name = this.folder();
     if (!name) { this.basePath = ""; return; }
     if (this.folderOk === name && this.basePath) return;
+    const base = await this.locate(token, name);
+    this.basePath = base; this.folderOk = name;
+  },
+  /** Acha a pasta de uma empresa pelo nome SEM mexer na pasta atual (seguro para consultar outras empresas enquanto a sincronizacao roda). */
+  async locate(token, name) {
     let path = null, scopeMissing = false;
     const miss = (r) => /missing_scope/.test(r.text);
     const meta = await this.rpc("files/get_metadata", token, { path: "/" + name });
@@ -122,8 +127,9 @@ const dropbox = {
       if (scopeMissing) throw new Error("O app precisa de uma permissão nova do Dropbox. Toque em Desconectar, depois em Conectar ao Dropbox e toque em Permitir. Se continuar, avise o administrador (permissões sharing.read e sharing.write).");
       throw new Error(`A pasta “${name}” não foi encontrada no seu Dropbox. Confirme com o administrador que o convite foi enviado ao e-mail desta conta Dropbox e aceite-o em dropbox.com › Compartilhado.${seen.length ? " Pastas compartilhadas que encontrei: " + seen.slice(0, 8).join(", ") + "." : ""}`);
     }
-    this.basePath = path.replace(/\/+$/, ""); this.folderOk = name;
-  },  async read(token) {
+    return path.replace(/\/+$/, "");
+  },
+  async read(token) {
     await this.checkFolder(token);
     const res = await this.call("https://content.dropboxapi.com/2/files/download", token, { path: this.filePath() });
     this.rev = null;

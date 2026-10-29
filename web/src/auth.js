@@ -75,7 +75,7 @@ P.auth = {
     this.s.multi = this.mine.length > 1; this.save();
   },
   async loadMine() {
-    const em = this.email(), d = dbx(), keep = { f: d.forced, ok: d.folderOk, bp: d.basePath };   // lista as empresas sem desviar a sincronizacao da atual
+    const em = this.email();
     this.mine = []; this.unclaimed = []; this.accs = {};
     for (const c of this.companies || []) {
       let acc = null;
@@ -86,7 +86,6 @@ P.auth = {
       const m = em && acc.members.find((x) => x.email === em);
       if (m) this.mine.push({ name: c.name, empresa: acc.empresa || nice(c.name), papel: m.papel, suspensa: !!acc.suspensa, bloqueada: !(await this.creatorListed(acc.criador, acc)) });
     }
-    d.forced = keep.f; d.folderOk = keep.ok; d.basePath = keep.bp;
   },
   // ---------------------------------------------------------------- entrada
   /** Chamado ao abrir o app. Quando o acesso estiver liberado, chama ready(). */
@@ -152,10 +151,9 @@ P.auth = {
   /** Aponta o Dropbox para a pasta de uma empresa. */
   useFolder(folder) { if (!folder) return; const d = dbx(); d.forced = folder; d.folderOk = null; d.basePath = null; },
   async readAccess(folder) {
-    this.useFolder(folder);
     const d = dbx(), tk = await this.token();
-    await d.checkFolder(tk);
-    const r = await d.getJson(tk, d.basePath + "/" + FILE);
+    const base = await d.locate(tk, folder);                 // nao troca a pasta da sincronizacao em andamento
+    const r = await d.getJson(tk, base + "/" + FILE);
     if (r) wr(ACCESS + slugOf(folder), r.data);
     return r ? r.data : null;
   },
