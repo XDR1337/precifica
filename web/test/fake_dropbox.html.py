@@ -17,7 +17,7 @@ FAKE = r"""<script>
   const d=L(); const ep=url.replace(/^https:\/\/[^/]+\/2\//,"");
   if(url.includes("/oauth2/token")) return J({access_token:"tok",expires_in:14400});
   if(ep==="files/list_folder") return J({entries:Object.keys(d.folders).map(k=>({".tag":"folder",name:d.folders[k].name})),has_more:false});
-  if(ep==="sharing/list_mountable_folders") return J({entries:[]});
+  if(ep==="sharing/list_mountable_folders") return J({entries:JSON.parse(localStorage.fakepend||"[]")});
   if(ep==="files/get_metadata"){const p=body.path.toLowerCase(); if(d.folders[p]) return J({path_display:"/"+d.folders[p].name,".tag":"folder",sharing_info:d.folders[p].sid?{shared_folder_id:d.folders[p].sid}:undefined}); return J({error_summary:"path/not_found/"},409);}
   if(ep==="files/create_folder_v2"){const p=body.path.toLowerCase(); if(d.folders[p]) return J({error_summary:"path/conflict/folder"},409); d.folders[p]={name:body.path.slice(1)}; S(d); return J({metadata:{}});}
   if(ep==="files/download"){const f=d.files[api.path.toLowerCase()]; if(!f) return new Response('{"error_summary":"path/not_found"}',{status:409}); return new Response(f.c,{status:200,headers:{"dropbox-api-result":JSON.stringify({rev:f.rev})}});}
@@ -25,7 +25,7 @@ FAKE = r"""<script>
   if(ep==="sharing/share_folder"){const p=body.path.toLowerCase(); d.folders[p].sid="sf1"; S(d); return J({shared_folder_id:"sf1"});}
   if(ep==="sharing/add_folder_member"){const l=JSON.parse(localStorage.fakeinv||"[]"); l.push(body.members[0].member.email); localStorage.fakeinv=JSON.stringify(l); return J({});}
   if(ep==="sharing/get_folder_metadata"){const k=Object.keys(d.folders).find(x=>d.folders[x].sid===body.shared_folder_id); return J({access_type:{".tag":(k&&d.folders[k].member)?"editor":"owner"}});}
-  if(ep==="sharing/relinquish_folder_membership"){const k=Object.keys(d.folders).find(x=>d.folders[x].sid===body.shared_folder_id); if(k) delete d.folders[k]; S(d); return J({});}
+  if(ep==="sharing/relinquish_folder_membership"){localStorage.fakepend=JSON.stringify(JSON.parse(localStorage.fakepend||"[]").filter(e=>e.shared_folder_id!==body.shared_folder_id)); const k=Object.keys(d.folders).find(x=>d.folders[x].sid===body.shared_folder_id); if(k) delete d.folders[k]; S(d); return J({});}
   if(ep==="files/delete_v2"){const p=body.path.toLowerCase(); delete d.folders[p]; for(const k of Object.keys(d.files)) if(k.startsWith(p+"/")) delete d.files[k]; S(d); return J({});}
   if(ep==="sharing/create_shared_link_with_settings") return J({url:"https://fake.dropbox/s/"+encodeURIComponent(body.path)});
   if(ep==="sharing/get_shared_link_file"){const path=decodeURIComponent(api.url.split("/s/")[1]).toLowerCase(); const f=d.files[path]; if(!f) return new Response("{}",{status:409}); return new Response(f.c,{status:200});}

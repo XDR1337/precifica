@@ -149,7 +149,7 @@ const dropbox = {
   },  // ---- arquivos e pastas das empresas (login multiempresa, ver auth.js)
   async listCompanies(token) {
     const out = new Map();
-    const add = (n, pending) => { if (/^precifica-/i.test(n || "") && !out.has(n.toLowerCase())) out.set(n.toLowerCase(), { name: n, pending: !!pending }); };
+    const add = (n, pending, sid) => { if (/^precifica-/i.test(n || "") && !out.has(n.toLowerCase())) out.set(n.toLowerCase(), { name: n, pending: !!pending, sid: sid || null }); };
     let r = await this.rpc("files/list_folder", token, { path: "", limit: 500 });
     if (!r.res.ok) throw this.friendly(r.res, r.text);
     for (;;) {
@@ -159,7 +159,7 @@ const dropbox = {
       if (!r.res.ok) break;
     }
     const m = await this.rpc("sharing/list_mountable_folders", token, {});
-    if (m.res.ok) (m.j.entries || []).forEach((e) => add(e.name, true));
+    if (m.res.ok) (m.j.entries || []).forEach((e) => add(e.name, true, e.shared_folder_id));
     return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
   },
   async getJson(token, path) {
@@ -222,6 +222,11 @@ const dropbox = {
     const r = await this.rpc("files/delete_v2", token, { path: i.path });
     if (!r.res.ok) throw this.friendly(r.res, r.text);
     return "apagada";
+  },
+  /** Recusa o convite de uma pasta compartilhada que ainda nao foi aceita (sem montar a pasta no Dropbox). */
+  async declineInvite(token, sid) {
+    const r = await this.rpc("sharing/relinquish_folder_membership", token, { shared_folder_id: sid, leave_a_copy: false });
+    if (!r.res.ok) throw new Error("O Dropbox não deixou recusar o convite por aqui. Recuse em dropbox.com › Compartilhado › Convites, ou peça a quem criou a pasta para remover a sua conta. " + (r.text || "").slice(0, 200));
   },
   async deleteFolder(token, name) {
     const r = await this.rpc("files/delete_v2", token, { path: "/" + name });

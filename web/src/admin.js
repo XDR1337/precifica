@@ -20,10 +20,15 @@ P.definePage("Administração", {
       let list = [];
       try { list = await dbx().listCompanies(await A.token()); } catch (e) { box.replaceChildren(h("p", { class: "fh", text: "Não foi possível listar: " + e.message })); return; }
       box.replaceChildren(...(list.length ? list.map((c) => h("div", { class: "auth-row" }, h("div", {}, h("b", { text: nice(c.name) }), h("span", { text: c.name + (c.pending ? " · convite novo" : "") })),
-        h("div", { class: "bar" }, btn("Gerenciar", () => gerenciar(c), "primary xs"), btn("Abrir", () => A.enterAsAdmin(c.name), "secondary xs"), btn("Excluir", () => excluir(c), "danger xs")))) : [h("p", { class: "fh", text: "Nenhuma empresa encontrada. Cada empresa precisa compartilhar a pasta “Precifica-…” com a sua conta do Dropbox." })]));
+        h("div", { class: "bar" }, btn("Gerenciar", () => gerenciar(c), "primary xs"), btn("Abrir", () => A.enterAsAdmin(c.name), "secondary xs"), btn(c.pending ? "Recusar convite" : "Excluir", () => excluir(c), "danger xs")))) : [h("p", { class: "fh", text: "Nenhuma empresa encontrada. Cada empresa precisa compartilhar a pasta “Precifica-…” com a sua conta do Dropbox." })]));
     };
     const excluir = async (c) => {
       try {
+        if (c.pending && c.sid) {                       // convite que ainda nao foi aceito: recusa sem criar a pasta no seu Dropbox
+          if (!(await P.confirm("Recusar convite", `A pasta “${c.name}” é de outra conta do Dropbox, que convidou a sua. Recusar o convite não apaga a pasta de quem a criou. Continuar?`, "Recusar convite", true))) return;
+          await dbx().declineInvite(await A.token(), c.sid);
+          P.ui.toast("Convite recusado"); drawCompanies(); return;
+        }
         const r = await A.deleteCompany(c.name);
         if (r) { P.ui.toast(r === "apagada" ? "Empresa excluída" : "Pasta removida da sua lista"); drawCompanies(); }
       } catch (e) { err(e); }
