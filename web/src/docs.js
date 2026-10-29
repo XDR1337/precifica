@@ -4,9 +4,10 @@
 P.docs = {};
 const { fnum: dfnum, money: dmoney, num: dnum, pct: dpct, esc: desc, safeDiv: dsafe } = P;
 
-const ORANGE = "#FF9900", NAVY = "#1B2A3D";
+// cores do documento: vem da paleta da empresa (cor principal e destaque), igual ao CSS (--c1, --c2)
+const PAL = () => P.palette(P.app.engine.cfg);
 
-function logoSrc(cfg) { return (cfg.empresa_logo && String(cfg.empresa_logo).startsWith("data:")) ? cfg.empresa_logo : P.LOGO; }
+const logoSrc = (cfg) => P.logoDoc(cfg);
 
 /** Tabela padrao: cabecalho azul-grafite, zebra, numeros a direita. */
 function T(header, rows, aligns, o = {}) {
@@ -17,7 +18,7 @@ function T(header, rows, aligns, o = {}) {
   return `<table class="dt${o.fs ? " fs" + o.fs : ""}${o.plain ? " plain" : ""}${o.w ? " fx" : ""}">${cg}${head}<tbody>${body}</tbody></table>`;
 }
 function KPIs(items) {
-  return `<div class="dk">${items.map(([l, v, c]) => `<div><span>${desc(l)}</span><b style="color:${c || NAVY}">${desc(v)}</b></div>`).join("")}</div>`;
+  return `<div class="dk">${items.map(([l, v, c]) => `<div><span>${desc(l)}</span><b style="color:${c || PAL().c1}">${desc(v)}</b></div>`).join("")}</div>`;
 }
 function Call(text, nivel = "info") { return `<div class="dcall ${nivel}">${desc(text)}</div>`; }
 const H2 = (t) => `<h2 class="dh2">${desc(t)}</h2>`;
@@ -25,7 +26,7 @@ const H3 = (t) => `<h3 class="dh3">${desc(t)}</h3>`;
 const SM = (t) => `<p class="dsm">${desc(t)}</p>`;
 
 function header(cfg, title) {
-  return `<div class="dhd"><img src="${logoSrc(cfg)}" alt=""><b>${desc(P.empresaNome(cfg))}</b><span>${desc(title)}</span></div><div class="rule2"></div>`;
+  return `<div class="dhd">${logoSrc(cfg) ? `<img src="${logoSrc(cfg)}" alt="">` : ""}<b>${desc(P.empresaNome(cfg))}</b><span>${desc(title)}</span></div><div class="rule2"></div>`;
 }
 function sheet(headerHtml, bodyHtml, cls = "") {
   return `<div class="paper ${cls}"><table class="sheet"><thead><tr><td>${headerHtml}</td></tr></thead><tbody><tr><td>${bodyHtml}</td></tr></tbody></table></div>`;
@@ -51,14 +52,14 @@ P.docs.report = function (e, secoes) {
   const sheets = [];
   const hdr = header(cfg, "Relatório de Precificação");
   let b = `<h1 class="dh1">Relatório de Precificação</h1>${SM(`${P.empresaNome(cfg)}  ·  emitido em ${P.fmtDate(P.todayISO())}`)}`;
-  b += KPIs([["Faturamento previsto", dmoney(rel.faturamento)], ["Margem de contribuição", dpct(rel.mc_pct), "#E08600"],
+  b += KPIs([["Faturamento previsto", dmoney(rel.faturamento)], ["Margem de contribuição", dpct(rel.mc_pct), PAL().c2d],
     ["Lucro operacional", dmoney(rel.lucro), rel.lucro >= 0 ? "#15803D" : "#B91C1C"], ["Ponto de equilíbrio", dmoney(rel.pe)]]);
   b += Call(rel.analise, rel.nivel);
   if (set.has("resumo")) {
     b += H2("1. Resultado do mês (DRE gerencial)");
     b += T(["Demonstração do resultado", "Valor (R$)", "% do faturamento"], rel.dre.map(([n, v, p]) => [n, dmoney(v), dpct(p)]), ["l", "r", "r"], { total: true, w: [56, 24, 20] });
     b += `<div class="dchart">${P.chart.bars(["Faturamento", "Deduções", "Custos variáveis", "Custos fixos", "Lucro operacional"], [rel.faturamento, rel.deducoes, rel.cv, rel.cf, rel.lucro],
-      [ORANGE, "#94A3B8", NAVY, "#52617F", rel.lucro >= 0 ? "#15803D" : "#B91C1C"], { w: 520, hgt: 210 })}</div>`;
+      [PAL().c2, "#94A3B8", PAL().c1, "#52617F", rel.lucro >= 0 ? "#15803D" : "#B91C1C"], { w: 520, hgt: 210 })}</div>`;
     b += H3("Indicadores gerenciais") + T(["Indicador", "Valor", "Como é calculado"], [
       ["Ponto de equilíbrio (vender para ficar no 0 a 0)", dmoney(rel.pe), "Custos fixos ÷ MC%"],
       ["Ponto de equilíbrio econômico (com o lucro desejado)", dmoney(rel.pe_econ), "(Custos fixos + lucro) ÷ MC%"],
@@ -173,7 +174,7 @@ P.docs.analysis = function (e, a) {
   const cfg = e.cfg, it = a.item;
   const tipo = it.tipo === "servico" ? "serviço" : "produto de revenda";
   let b = `<h1 class="dh1">Análise do ${tipo}: ${desc(it.nome)}</h1>${SM(`Desconto simulado: ${dpct(a.desconto)}  ·  Lucro desejado: ${dpct(a.lucro_desejado)}  ·  Rateio de custos fixos: ${dpct(a.rateio_pct)}`)}`;
-  b += KPIs([["Preço praticado", dmoney(a.preco)], ["Preço sugerido", a.viavel ? dmoney(a.preco_sug) : "inviável", "#E08600"],
+  b += KPIs([["Preço praticado", dmoney(a.preco)], ["Preço sugerido", a.viavel ? dmoney(a.preco_sug) : "inviável", PAL().c2d],
     ["Lucro no preço praticado", `${dmoney(a.lucro)} (${dpct(dsafe(a.lucro, a.preco))})`, a.lucro >= 0 ? "#15803D" : "#B91C1C"]]);
   if (a.aviso) b += Call(a.aviso, "warn");
   const dre = (linhas, preco, mc, rateio, lucro, markup) => {
@@ -203,8 +204,8 @@ P.docs.donut = function (a, sug) {
   const [p, cv, ded, rat, luc] = sug
     ? [a.preco_sug, a.item.cv, a.linhas_sug.slice(-4).reduce((x, l) => x + l[1], 0), a.rateio_sug, a.lucro_sug]
     : [a.preco, a.item.cv, a.linhas.slice(-4).reduce((x, l) => x + l[1], 0), a.rateio, a.lucro];
-  const parts = [{ label: "Custos diretos", value: cv, color: NAVY }, { label: "Deduções", value: ded, color: "#94A3B8" }, { label: "Custos fixos", value: rat, color: "#52617F" },
-    { label: "Lucro", value: Math.max(luc, 0), color: ORANGE }].filter((x) => x.value > 0.0001);
+  const parts = [{ label: "Custos diretos", value: cv, color: PAL().c1 }, { label: "Deduções", value: ded, color: "#94A3B8" }, { label: "Custos fixos", value: rat, color: "#52617F" },
+    { label: "Lucro", value: Math.max(luc, 0), color: PAL().c2 }].filter((x) => x.value > 0.0001);
   if (!parts.length || p <= 0) return `<div class="chart-empty">Sem dados</div>`;
   return P.chart.donut(parts, dmoney(p));
 };
@@ -221,7 +222,7 @@ P.docs.proposal = function (cfg, prop, itens) {
   const dt = ctx.data.slice(8, 10) + "/" + ctx.data.slice(5, 7) + "/" + ctx.data.slice(2, 4);
   const ac = (prop.aos_cuidados || prop.cliente_nome || "").trim();
   // cabecalho que se repete em todas as paginas: logotipo + numero e data; a faixa laranja/azul fecha o bloco
-  const head = `<div class="ph"><img src="${logoSrc(cfg)}" alt=""><div class="pk"><b>PROPOSTA Nº ${desc(String(numero))}</b><span>Data: ${dt}</span></div></div><div class="rule2"></div>`;
+  const head = `<div class="ph">${logoSrc(cfg) ? `<img src="${logoSrc(cfg)}" alt="">` : `<div class="pname">${desc(P.empresaNome(cfg))}</div>`}<div class="pk"><b>PROPOSTA Nº ${desc(String(numero))}</b><span>Data: ${dt}</span></div></div><div class="rule2"></div>`;
   const secao = (t, texto, o = {}) => {
     const ps = P.paras(sub(texto));
     const tit = sub(t).trim();
@@ -310,6 +311,7 @@ P.docs.closing = function (cfg, prop, ctx, ac, onlySig = false) {
 let docModal = null, docStyle = null;
 P.openDoc = function (d) {
   const view = P.h("div", { class: "docview" });
+  view.style.cssText = P.docVars(P.palette(P.app.engine.cfg));          // paleta da empresa (vale na tela e na impressao)
   view.innerHTML = d.html;
   const printBtn = P.btn("Imprimir / Salvar PDF", () => { fit(); setTimeout(() => window.print(), 50); }, "primary");
   const hint = P.h("p", { class: "dochint", text: "Dica: na janela de impressão escolha “Salvar como PDF” (no celular: Imprimir › Salvar como PDF ou Compartilhar)." });

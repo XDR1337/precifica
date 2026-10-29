@@ -25,7 +25,7 @@ from precifica.assets import ACRS_LOGO_PNG       # noqa: E402
 from precifica.core import APP_AUTHOR, APP_VERSION  # noqa: E402
 
 SRC = os.path.join(HERE, "src")
-JS_ORDER = ["core.js", "ui-base.js", "docs.js", "signature.js", "pages-a.js", "pages-b.js", "proposal.js", "tutorial.js", "importer.js", "sync.js", "auth.js", "admin.js", "app.js"]
+JS_ORDER = ["core.js", "palette.js", "ui-base.js", "docs.js", "signature.js", "pages-a.js", "pages-b.js", "proposal.js", "tutorial.js", "importer.js", "sync.js", "auth.js", "admin.js", "app.js"]
 APP_NAME = "Precifica"
 
 
@@ -63,9 +63,12 @@ def seed_js() -> str:
         "ENCARGOS_PADRAO": seed.ENCARGOS_PADRAO, "CONFIG_PADRAO": seed.CONFIG_PADRAO, "EXEMPLO": seed.EXEMPLO,
         "FECHO_PADRAO": seed.FECHO_PADRAO, "MODELO_PROPOSTA": seed.MODELO_PROPOSTA, "EXEMPLO_PROPOSTA": seed.EXEMPLO_PROPOSTA,
     }
-    logo = "data:image/png;base64," + base64.b64encode(ACRS_LOGO_PNG).decode("ascii")
+    logo_acrs = "data:image/png;base64," + base64.b64encode(ACRS_LOGO_PNG).decode("ascii")
+    with open(os.path.join(HERE, "brand", "precifica-marca.svg"), "rb") as f:
+        logo = "data:image/svg+xml;base64," + base64.b64encode(f.read()).decode("ascii")
     return (f"P.SEED = {json.dumps(data, ensure_ascii=False, separators=(',', ':'))};\n"
             f"P.LOGO = {json.dumps(logo)};\n"
+            f"P.LOGO_ACRS = {json.dumps(logo_acrs)};\n"
             f"P.SYNC_DROPBOX_KEY = {json.dumps(dropbox_key())};\n"
             'P.SYNC_DROPBOX_FOLDER = "";\n'   # a pasta unica (Precifica-Equipe) nao e mais usada: cada empresa tem a sua
             f"P.ADMIN_IDS = {json.dumps([x.strip() for x in _cfg('admin_ids.txt', 'PRECIFICA_ADMIN_IDS').replace(chr(10), ',').split(',') if x.strip()])};\n"

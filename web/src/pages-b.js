@@ -6,6 +6,26 @@ const SEED = P.SEED;
 const { PRIMARY, NAVY, STEEL, GREEN, RED } = P.colors;
 const mcTag = P.mcTag;
 
+/** Miniatura de documento com a paleta (cabecalho, tabela e total), para ver o efeito das cores. */
+function miniDoc(cfg, pal) {
+  const el = h("div", { class: "idv-mini" }, h("b", { text: P.empresaNome(cfg) || "Sua empresa" }), h("div", { class: "m-rule" }), h("div", { text: "Proposta técnica e comercial" }),
+    h("div", { class: "m-h" }, h("span", { text: "Descrição" }), h("span", { text: "Valor" })), h("div", { class: "m-r" }, h("span", { text: "Serviço de exemplo" }), h("span", { text: "R$ 1.200,00" })),
+    h("div", { class: "m-r" }, h("span", { text: "Outro serviço" }), h("span", { text: "R$ 800,00" })), h("div", { class: "m-t" }, "Total  R$ 2.000,00"));
+  el.style.cssText = P.docVars(pal);
+  return el;
+}
+/** Pergunta se a empresa quer usar as cores achadas na logo. Devolve true/false. */
+function paletteDialog(cfg, r) {
+  const sw = (c, big) => h("i", { style: { background: c, width: big ? "54px" : "28px", height: big ? "54px" : "28px", borderRadius: "8px", display: "block", border: "1px solid rgba(0,0,0,.12)" }, title: c });
+  let m;
+  m = P.modal({ title: "Cores da sua logo", cls: "sm", body: [h("p", { class: "msg", text: "Estas são as cores principais da sua logo. Elas passam a valer em todos os documentos em PDF da empresa: proposta, relatórios, tabela de preços e análise." }),
+    h("div", { class: "idv-ext", style: { alignItems: "center", margin: "6px 0 10px" } }, sw(r.c1, true), sw(r.c2, true), h("span", { class: "fh", text: "principal e destaque" })),
+    r.extras && r.extras.length > 2 ? h("div", { class: "idv-ext", style: { marginBottom: "10px" } }, r.extras.map((c) => sw(c))) : "",
+    miniDoc(cfg, P.palette({ cor_principal: r.c1, cor_destaque: r.c2 }))],
+  footer: [btn("Manter as atuais", () => m.close(false), "secondary"), h("span", { class: "grow" }), btn("Usar estas cores", () => m.close(true))] });
+  return m.promise.then((x) => !!x);
+}
+
 // ====================================================================== TABELA DE PRECOS
 P.definePage("Tabela de preços", {
   subtitle: "Todos os itens com custo, deduções e margem de contribuição no preço atual. Vermelho = prejuízo; laranja = margem abaixo de 20%.",
@@ -300,11 +320,40 @@ P.definePage("Configurações", {
       return P.field(fd, inp);
     };
     // logotipo
-    const logoImg = h("img", { class: "logo-prev", alt: "Logotipo", src: (cfg.empresa_logo && cfg.empresa_logo.startsWith("data:")) ? cfg.empresa_logo : P.LOGO });
+    const logoImg = h("img", { class: "logo-prev", alt: "Logotipo", src: P.logoApp(cfg) });
     const custom = !!(cfg.empresa_logo && cfg.empresa_logo.startsWith("data:"));
-    const logoBox = h("div", { class: "logo-box" }, h("b", { text: custom ? "Logotipo da empresa" : "Logotipo padrão (ACRS)" }), logoImg,
-      btn("Escolher imagem", () => this.escolherLogo(pg), "secondary sm"), btn("Voltar ao logo da ACRS", () => { pg.db.setCfg("empresa_logo", ""); P.app.changed("Logotipo da ACRS restaurado"); }, "ghost sm"));
+    const logoBox = h("div", { class: "logo-box" }, h("b", { text: custom ? "Logotipo da empresa" : "Sem logotipo" }), logoImg,
+      h("span", { class: "fh", text: custom ? "Aparece nos documentos e no menu." : "Os documentos saem só com o nome da empresa." }),
+      btn(custom ? "Trocar imagem" : "Escolher imagem", () => this.escolherLogo(pg), "secondary sm"), custom ? btn("Remover logotipo", () => { pg.db.setCfg("empresa_logo", ""); P.app.changed("Logotipo removido"); }, "ghost sm") : null);
     const empresa = card(cardTitle("Sua empresa", "Aparece no cabeçalho das propostas e dos relatórios"), h("div", { class: "cfg-top" }, h("div", { class: "fg" }, this.EMPRESA.map(mk)), logoBox));
+    const ident = (() => {
+      const okHex = (v) => /^#[0-9a-f]{6}$/i.test(String(v || ""));
+      let c1 = okHex(cfg.cor_principal) ? cfg.cor_principal.toUpperCase() : P.COR_PADRAO.c1, c2 = okHex(cfg.cor_destaque) ? cfg.cor_destaque.toUpperCase() : P.COR_PADRAO.c2;
+      const mini = miniDoc(cfg, P.palette({ cor_principal: c1, cor_destaque: c2 }));
+      const cp1 = h("input", { type: "color", value: c1, "aria-label": "Cor principal" }), cp2 = h("input", { type: "color", value: c2, "aria-label": "Cor de destaque" });
+      const tx1 = h("input", { class: "in", type: "text", value: c1, maxlength: 7 }), tx2 = h("input", { class: "in", type: "text", value: c2, maxlength: 7 });
+      const paint = () => { mini.style.cssText = P.docVars(P.palette({ cor_principal: c1, cor_destaque: c2 })); };
+      const set = (a, b2) => { c1 = a.toUpperCase(); c2 = b2.toUpperCase(); cp1.value = tx1.value = c1; cp2.value = tx2.value = c2; paint(); };
+      cp1.addEventListener("input", () => set(cp1.value, c2)); cp2.addEventListener("input", () => set(c1, cp2.value));
+      tx1.addEventListener("change", () => (okHex(tx1.value) ? set(tx1.value, c2) : (tx1.value = c1))); tx2.addEventListener("change", () => (okHex(tx2.value) ? set(c1, tx2.value) : (tx2.value = c2)));
+      const aplicar = (a, b2, msg) => { pg.db.setMany({ cor_principal: a.toUpperCase(), cor_destaque: b2.toUpperCase() }); P.app.changed(msg || "Cores dos documentos aplicadas"); };
+      const atual = P.palette(cfg);
+      const tiles = P.PALETAS.map(([nome, a, b2]) => {
+        const on = a.toUpperCase() === atual.c1 && b2.toUpperCase() === atual.c2;
+        return h("button", { type: "button", class: "idv-tile" + (on ? " on" : ""), onClick: () => aplicar(a, b2, "Paleta “" + nome + "” aplicada") }, h("div", { class: "idv-sw" }, h("i", { style: { background: a } }), h("i", { style: { background: b2 } })), h("span", { text: nome }));
+      });
+      return card(cardTitle("Identidade visual dos documentos", "As cores da empresa valem em todos os PDFs: proposta, relatórios, tabela de preços e análise."),
+        h("div", { class: "idv" },
+          h("div", { class: "idv-row" },
+            h("div", { class: "idv-col" }, h("span", { text: "Cor principal (títulos e tabelas)" }), h("div", { class: "idv-pick" }, cp1, tx1)),
+            h("div", { class: "idv-col" }, h("span", { text: "Cor de destaque (faixas e detalhes)" }), h("div", { class: "idv-pick" }, cp2, tx2)),
+            mini),
+          h("div", { class: "bar" }, btn("Aplicar cores", () => aplicar(c1, c2)),
+            custom ? btn("Gerar da logo", async () => { const r = await P.logoColors(cfg.empresa_logo); if (!r) return P.info("Não achei cores", "A imagem não tem cores suficientes para montar uma paleta. Escolha uma paleta pronta abaixo.", "warn"); if (await paletteDialog(cfg, r)) aplicar(r.c1, r.c2, "Paleta gerada a partir da logo"); }, "secondary") : null,
+            btn("Cores padrão", () => aplicar(P.COR_PADRAO.c1, P.COR_PADRAO.c2, "Cores padrão restauradas"), "ghost")),
+          h("div", {}, h("b", { text: "Paletas prontas" }), h("p", { class: "fh", text: "Toque em uma para aplicar na hora." })),
+          h("div", { class: "idv-pal" }, tiles)));
+    })();
     const params = card(cardTitle("Parâmetros de preço e propostas"), h("div", { class: "fg c3" }, this.PARAMS.map(([k, l]) => mk([k, l, 1]))),
       h("p", { class: "fh", text: "Hora extra e adicional noturno: percentuais somados ao custo da hora quando você escolhe “Hora extra”, “Adicional noturno” ou “Hora extra noturna” na mão de obra de um serviço (CLT: 50% e 20%). Os adicionais se somam (hora extra noturna = 50% + 20%; domingo/feriado noturno = 100% + 20%)." }),
       h("p", { class: "fh", text: "Os textos padrão das propostas (escopo, premissas, garantia…) ficam no próprio editor de proposta: menu “Modelos de texto…” › “Salvar estes textos como padrão”." }));
@@ -347,9 +396,9 @@ P.definePage("Configurações", {
       const sc = card(cardTitle("Sincronização (Dropbox)", "Mantém o celular, o computador e a equipe com os mesmos dados."), h("p", { class: "msg", text: stTxt }),
         h("div", { class: "bar" }, btn("Sincronizar agora", () => sy.run({ interactive: true }).then(() => pg.rerender()).catch((e) => P.info("Sincronização", e.message, "danger")))));
       const mine = P.auth.configCards(pg, card);
-      return P.auth.isOwner() ? [...mine, empresa, params, listas, enc, tut, sc, dados, sobre] : [...mine, tut, sobre];
+      return P.auth.isOwner() ? [...mine, empresa, ident, params, listas, enc, tut, sc, dados, sobre] : [...mine, tut, sobre];
     }
-    return [empresa, params, listas, enc, tut, syncCard, dados, sobre];
+    return [empresa, ident, params, listas, enc, tut, syncCard, dados, sobre];
   },
   salvar() {
     const vals = {};
@@ -370,8 +419,11 @@ P.definePage("Configurações", {
       const k = Math.min(1, 600 / Math.max(img.width, img.height));
       const cv = h("canvas", { width: Math.round(img.width * k), height: Math.round(img.height * k) });
       cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
-      pg.db.setCfg("empresa_logo", cv.toDataURL(f.type === "image/jpeg" ? "image/jpeg" : "image/png", 0.92));
+      const final = cv.toDataURL(f.type === "image/jpeg" ? "image/jpeg" : "image/png", 0.92);
+      pg.db.setCfg("empresa_logo", final);
       P.app.changed("Logotipo atualizado");
+      const cores = await P.logoColors(final);                                    // paleta tirada da propria logo
+      if (cores && (await paletteDialog(pg.db.config(), cores))) { pg.db.setMany({ cor_principal: cores.c1, cor_destaque: cores.c2 }); P.app.changed("Paleta gerada a partir da logo"); }
     } catch (e) { P.info("Não foi possível usar a imagem", String(e.message || e), "danger"); }
   },
   async backup(pg) {
