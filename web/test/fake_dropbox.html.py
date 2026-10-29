@@ -14,6 +14,7 @@ FAKE = r"""<script>
  window.fetch=async function(url,opt){
   url=String(url); opt=opt||{}; const h=opt.headers||{}; const api=h["Dropbox-API-Arg"]?JSON.parse(h["Dropbox-API-Arg"]):null;
   let body={}; try{ if(typeof opt.body==="string"&&!api) body=JSON.parse(opt.body);}catch(e){}
+  await new Promise(r=>setTimeout(r,+localStorage.fakedelay||0));
   const d=L(); const ep=url.replace(/^https:\/\/[^/]+\/2\//,"");
   if(url.includes("/oauth2/token")) return J({access_token:"tok",expires_in:14400});
   if(ep==="files/list_folder") return J({entries:Object.keys(d.folders).map(k=>({".tag":"folder",name:d.folders[k].name})),has_more:false});

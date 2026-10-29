@@ -517,7 +517,24 @@ P.auth = {
   },
 
   // ---------------------------------------------------------------- telas
-  setBusy(msg) { this.busy = msg; this.view(); },
+  setBusy(msg, steps) { this.busy = msg; this.busySteps = steps || null; this.view(); },
+  /** Animacao de carregamento: barras que sobem (o icone do app), barra de progresso e as etapas aparecendo uma a uma. */
+  loaderEl(msg, steps) {
+    const items = (steps || []).map((t) => h("li", { text: t }));
+    const el = h("div", { class: "loader", role: "status", "aria-live": "polite" }, h("div", { class: "ld-bars" }, h("i"), h("i"), h("i")), h("p", { class: "ld-t", text: msg }),
+      h("div", { class: "ld-bar" }, h("i")), items.length ? h("ul", { class: "ld-steps" }, items) : "");
+    let i = 0;
+    const paint = () => items.forEach((li, k) => { li.className = k < i ? "done" : k === i ? "now" : ""; });
+    paint();
+    if (items.length > 1) { const iv = setInterval(() => { if (!el.isConnected && i) return clearInterval(iv); if (i < items.length - 1) { i++; paint(); } else clearInterval(iv); }, 1400); }
+    return el;
+  },
+  /** Cobre a tela com a animacao enquanto algo e' criado. Devolve um objeto com close(). */
+  loader(msg, steps) {
+    const el = h("div", { class: "auth", style: { zIndex: 320 } }, h("div", { class: "auth-card" }, h("div", { class: "auth-brand" }, h("img", { src: P.LOGO, alt: "" }), h("div", {}, h("b", { text: "Precifica" }), h("span", { text: "Precificação e propostas" }))), this.loaderEl(msg, steps)));
+    document.body.append(el);
+    return { close: () => el.remove() };
+  },
   hide() { if (this.el) { this.el.remove(); this.el = null; } },
   show() {
     const sp = document.getElementById("splash"); if (sp) sp.remove();
@@ -541,7 +558,7 @@ P.auth = {
     const el = this.el, card = h("div", { class: "auth-card" });
     el.replaceChildren(card);
     card.append(h("div", { class: "auth-brand" }, h("img", { src: P.LOGO, alt: "" }), h("div", {}, h("b", { text: "Precifica" }), h("span", { text: "Precificação e propostas" }))));
-    if (this.busy) { card.append(h("div", { class: "auth-busy" }, h("div", { class: "spinner" }), h("p", { text: this.busy }))); return; }
+    if (this.busy) { card.append(this.loaderEl(this.busy, this.busySteps)); return; }
     if (this.notice) card.append(h("div", { class: "callout danger" }, h("p", { class: "msg", text: this.notice })));
     if (!this.connected()) return this.viewConnect(card);
     this.viewHome(card);
@@ -571,7 +588,7 @@ P.auth = {
           ev.preventDefault(); this.notice = "";
           try {
             if (!nome.value.trim()) throw new Error("Informe o nome da empresa.");
-            this.setBusy("Criando a empresa…");
+            this.setBusy("Criando a sua empresa…", ["Criando a pasta no Dropbox", "Definindo você como dono", "Convidando os administradores", "Preparando a base de dados"]);
             try { await this.create({ empresa: nome.value.trim() }); } finally { this.busy = ""; }
             await this.activate();
           } catch (e) { this.notice = e.message; this.view(); }
@@ -634,7 +651,8 @@ P.auth = {
         if (mias.length < ent.limite) bar.append(btn("+ Criar nova empresa", guard(async () => {
           const v = await P.ask("Nova empresa", [{ key: "nome", label: "Nome da empresa", required: true }], {}, { ok: "Criar empresa" });
           if (!v) return false;
-          await this.create({ empresa: v.nome.trim() });
+          const ld = this.loader("Criando a sua empresa…", ["Criando a pasta no Dropbox", "Definindo você como dono", "Convidando os administradores", "Preparando a base de dados"]);
+          try { await this.create({ empresa: v.nome.trim() }); } catch (e) { ld.close(); throw e; }
           wr(SES, this.me, sessionStorage); P.app.db && P.app.db._flush();
           location.reload();
           return false;

@@ -421,3 +421,18 @@ select.in{padding-right:8px}
 .rte-b{min-width:34px;height:34px;border:1px solid var(--bd);background:#fff;border-radius:7px;font:inherit;font-size:14px;color:var(--ink);cursor:pointer;padding:0 8px}.rte-b:hover{background:#fff1db}.rte-b.on{background:var(--orange);border-color:var(--orange-h);color:#111A25}
 .rte-sep{width:1px;height:22px;background:var(--bd);margin:0 3px}.rte-vars{height:34px;border:1px solid var(--bd);border-radius:7px;background:#fff;font:inherit;font-size:13px;padding:0 6px;margin-left:auto;max-width:150px}
 .rte-ed{padding:9px 11px;font:inherit;line-height:1.5;outline:none;overflow:auto;max-height:55vh;white-space:pre-wrap;overflow-wrap:anywhere}.rte-ed:empty::before{content:"Digite o texto aqui…";color:var(--subtle)}
+
+/* animacao de carregamento (criar empresa) */
+.loader{display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 4px 6px;text-align:center}
+.ld-bars{display:flex;align-items:flex-end;gap:7px;height:56px}.ld-bars i{display:block;width:15px;border-radius:3px;background:var(--orange);transform-origin:bottom;animation:ldb 1.2s ease-in-out infinite}
+.ld-bars i:nth-child(1){height:26px}.ld-bars i:nth-child(2){height:40px;animation-delay:.16s}.ld-bars i:nth-child(3){height:54px;animation-delay:.32s}
+@keyframes ldb{0%,100%{transform:scaleY(.35);opacity:.45}50%{transform:scaleY(1);opacity:1}}
+.ld-t{margin:0;font-weight:700;font-size:16px;color:var(--navy)}
+.ld-bar{width:100%;height:5px;background:#E6E9EE;border-radius:4px;overflow:hidden}.ld-bar i{display:block;height:100%;width:38%;border-radius:4px;background:linear-gradient(90deg,var(--orange),#FFD28A);animation:ldp 1.5s ease-in-out infinite}
+@keyframes ldp{0%{margin-left:-38%}100%{margin-left:100%}}
+.ld-steps{list-style:none;margin:2px 0 0;padding:0;display:flex;flex-direction:column;gap:7px;font-size:13.5px;text-align:left;min-width:230px}
+.ld-steps li{color:var(--subtle);transition:color .3s,transform .3s;display:flex;align-items:center;gap:9px}.ld-steps li::before{content:"";width:9px;height:9px;border-radius:50%;border:2px solid #CBD2DC;flex:none}
+.ld-steps li.now{color:var(--navy);font-weight:600}.ld-steps li.now::before{border-color:var(--orange);background:var(--orange);animation:ldd 1s ease-in-out infinite}
+.ld-steps li.done{color:var(--ink2)}.ld-steps li.done::before{content:"✓";width:auto;height:auto;border:0;color:var(--orange-h);font-weight:700;font-size:13px;line-height:1}
+@keyframes ldd{0%,100%{transform:scale(.7)}50%{transform:scale(1.15)}}
+@media (prefers-reduced-motion:reduce){.ld-bars i,.ld-bar i,.ld-steps li.now::before{animation:none}}
