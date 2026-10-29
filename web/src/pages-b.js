@@ -270,7 +270,7 @@ P.definePage("Exportar PDF", {
     const setAll = (on) => { st.sel = on ? new Set(P.docs.SECOES.map((s) => s[0])) : new Set(); pg.rerender(); };
     const c1 = card(cardTitle("Relatório completo de precificação", "Escolha as seções que entram no documento"), h("div", { class: "chks" }, boxes),
       h("div", { class: "bar" }, btn("Gerar relatório em PDF", gen), btn("Marcar todas", () => setAll(true), "ghost"), btn("Desmarcar todas", () => setAll(false), "ghost")));
-    const other = [["Proposta técnica e comercial", "Documento no modelo da ACRS: escopo, investimento, pagamento e assinaturas", () => P.app.show("Propostas")],
+    const other = [["Proposta técnica e comercial", "Documento com as cores e o logotipo da empresa: escopo, investimento, pagamento e assinaturas", () => P.app.show("Propostas")],
       ["Análise de um serviço", "DRE unitária, preço sugerido e gráficos de um serviço ou produto", () => P.app.show("Análise de preço")],
       ["Tabela de preços", "Somente a tabela de preços de serviços e revenda", () => P.app.openDoc(P.docs.prices(P.app.engine))]];
     const c2 = card(cardTitle("Outros documentos"), h("ul", { class: "linklist" }, other.map(([t, s, fn]) => h("li", null, h("div", null, h("b", { text: t }), h("p", { class: "cs", text: s })), btn("Abrir", fn, "secondary sm")))),
@@ -301,7 +301,7 @@ P.download = download;
 P.definePage("Configurações", {
   subtitle: "Dados da sua empresa (aparecem nas propostas e relatórios), parâmetros, encargos e backup.",
   EMPRESA: [["empresa_nome", "Razão social / nome", 2], ["empresa_fantasia", "Nome fantasia", 1], ["empresa_cnpj", "CNPJ / CPF", 1], ["empresa_telefone", "Telefone / WhatsApp", 1], ["empresa_email", "E-mail", 1],
-    ["empresa_endereco", "Endereço", 2], ["empresa_bairro", "Bairro", 1], ["empresa_cidade", "Cidade", 1], ["empresa_uf", "UF", 1], ["empresa_cep", "CEP", 1], ["empresa_sigla", "Nome curto nos textos (ex.: ACRS)", 1],
+    ["empresa_endereco", "Endereço", 2], ["empresa_bairro", "Bairro", 1], ["empresa_cidade", "Cidade", 1], ["empresa_uf", "UF", 1], ["empresa_cep", "CEP", 1], ["empresa_sigla", "Nome curto nos textos (ex.: Silva)", 1],
     ["empresa_site", "Site / Instagram", 1], ["proposta_assinante_empresa", "Assinante da empresa nas propostas (nome e função)", 2]],
   PARAMS: [["lucro_desejado_pct", "Lucro desejado padrão (%)"], ["proposta_proximo_numero", "Próximo nº de proposta"], ["proposta_validade_dias", "Validade das propostas (dias)"],
     ["adicional_hora_extra_pct", "Adicional de hora extra (%)"], ["adicional_noturno_pct", "Adicional noturno (%)"], ["adicional_feriado_pct", "Adicional de domingo / feriado (%)"]],
@@ -460,7 +460,7 @@ P.definePage("Configurações", {
     if (await P.confirm("Apagar todos os dados", "Todos os cadastros, propostas e configurações serão apagados (um backup é baixado antes). Tem certeza?", "Apagar tudo", true)) {
       download(`precifica_antes_de_apagar_${P.todayISO().replace(/-/g, "")}.json`, pg.db.exportData());
       pg.db.resetAll();
-      P.auth.resetIdentity(pg.db);                       // empresa: so o nome (com logotipo simples), sem dados nem logo da ACRS
+      P.auth.resetIdentity(pg.db);                       // empresa: so o nome (com logotipo simples), sem dados nem logotipo
       P.app.changed("Dados apagados");
     }
   },

@@ -110,7 +110,7 @@ class ProposalEditor {
     const a = this.ent("Nº da proposta"), b = this.ent("Data (dd/mm/aaaa)"), c = this.ent("Validade (dias)");
     const st = P.inp({ kind: "choice", options: SEED.STATUS_PROPOSTA }, "Rascunho");
     const stw = P.field({ label: "Situação" }, st);
-    const ti = this.ent("Título (ex.: Projeto e Execução Elétrica - Obra Kitnets)", 2), ac = this.ent("A/C. – aos cuidados de", 2);
+    const ti = this.ent("Título (ex.: Instalação e manutenção de equipamentos)", 2), ac = this.ent("A/C. – aos cuidados de", 2);
     Object.assign(this, { e_num: a.el, e_data: b.el, e_val: c.el, o_status: st, e_titulo: ti.el, e_ac: ac.el });
     a.el.setAttribute("inputmode", "numeric"); c.el.setAttribute("inputmode", "numeric");
     const prop = card(cardTitle("Proposta", "Cabeçalho do documento: “PROPOSTA TÉCNICA E COMERCIAL: N° … - título”"), h("div", { class: "fg" }, a.wrap, b.wrap, c.wrap, stw, ti.wrap, ac.wrap));
@@ -247,8 +247,8 @@ class ProposalEditor {
         this.app.engine.reload(); this.cfg = this.app.engine.cfg;
         P.ui.toast("Textos padrão salvos – valem para as próximas propostas", "ok", 3500);
       } },
-      { text: "Carregar o exemplo (Nº 787 – Obra Kitnets)", fn: async () => {
-        if (await P.confirm("Carregar o exemplo", "Preencher TODOS os campos com a proposta nº 787 (Obra Kitnets 200A) que serviu de modelo? O que está digitado aqui será substituído.", "Carregar exemplo")) this.loadExample();
+      { text: "Carregar uma proposta de exemplo", fn: async () => {
+        if (await P.confirm("Carregar o exemplo", "Preencher TODOS os campos com uma proposta de exemplo (dados fictícios, para você ver como o documento fica)? O que está digitado aqui será substituído.", "Carregar exemplo")) this.loadExample();
       } }]);
     return m;
   }
@@ -365,7 +365,7 @@ ProposalEditor.CLI_KEYS = ["nome", "documento", "telefone", "email", "endereco",
 
 // ====================================================================== PROPOSTAS (lista)
 P.definePage("Propostas", {
-  subtitle: "Monte a proposta técnica e comercial (escopo, textos, investimento e pagamento) e gere o PDF no modelo da ACRS.",
+  subtitle: "Monte a proposta técnica e comercial (escopo, textos, investimento e pagamento) e gere o PDF com as cores e o logotipo da sua empresa.",
   state: { filtro: "Todas" },
   actions: () => [btn("+ Nova proposta", () => P.pages["Propostas"].newProposal())],
   render(pg) {

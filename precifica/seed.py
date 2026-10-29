@@ -197,157 +197,103 @@ EXEMPLO = {
 
 
 # ======================================================================================================
-# PROPOSTA TECNICA E COMERCIAL (modelo ACRS)
+# PROPOSTA TECNICA E COMERCIAL (textos genericos, servem para qualquer tipo de servico)
 # Os textos aceitam: {empresa} {numero} {validade_dias} {total} {cliente} {titulo}  e  **negrito**.
 # Linha em branco = novo paragrafo; quebra de linha simples = quebra dentro do paragrafo.
 # ======================================================================================================
-FECHO_PADRAO = "Permanecemos a disposição para esclarecimentos adicionais,"
+FECHO_PADRAO = "Permanecemos à disposição para esclarecimentos adicionais."
 
 MODELO_PROPOSTA = {
     "escopo_intro": "O escopo a ser executado pela {empresa} compreende as seguintes etapas:",
-    "escopo_nota": ("Nota: Todas as instalações seguirão rigorosamente o quantitativo e o layout definidos no projeto "
-                    "elétrico elaborado nesta proposta."),
+    "escopo_nota": "Nota: Os quantitativos e as atividades considerados restringem-se ao descrito nesta proposta.",
     "secoes_pre": [
-        dict(titulo="DOCUMENTOS E PROJETOS CONSIDERADOS", texto=""),
-        dict(titulo="PREMISSAS TÉCNICAS",
-             texto=("As instalações serão executadas em total conformidade com a ABNT NBR 5410 (Instalações Elétricas de "
-                    "Baixa Tensão) e normativas vigentes da concessionária de energia.")),
+        dict(titulo="DOCUMENTOS E INFORMAÇÕES CONSIDERADOS", texto=""),
+        dict(titulo="PREMISSAS", texto="Os valores consideram o escopo descrito nesta proposta. Alterações de escopo serão avaliadas e orçadas à parte."),
         dict(titulo="FORA DO ESCOPO", texto=""),
         dict(titulo="RESPONSABILIDADE DA CONTRATANTE",
-             texto="Liberação irrestrita das frentes de trabalho e disponibilização de ponto de energia e água."),
+             texto=("Fornecer as informações e os acessos necessários à execução dos serviços.\n\n"
+                    "Liberar as frentes de trabalho nas datas combinadas.")),
         dict(titulo="RESPONSABILIDADE DA {EMPRESA}",
              texto=("Executar os serviços com qualidade, empregando mão de obra qualificada e ferramentas adequadas.\n\n"
-                    "Garantir a utilização de Equipamentos de Proteção Individual (EPIs) por toda a equipe.")),
+                    "Cumprir os prazos combinados e as normas de segurança aplicáveis.")),
         dict(titulo="PRAZO DE EXECUÇÃO", texto=""),
-        dict(titulo="RESPONSABILIDADE TÉCNICA",
-             texto=("A {empresa} emitirá as devidas Anotações de Responsabilidade Técnica (ART) referentes ao projeto "
-                    "elétrico e à execução dos serviços, garantindo o respaldo de engenharia para a obra.")),
     ],
     "secoes_pos": [
         dict(titulo="VALIDADE DA PROPOSTA",
              texto="Esta proposta comercial é válida por {validade_dias} dias corridos a partir da data de sua emissão."),
         dict(titulo="GARANTIA",
-             texto=("A {empresa} oferece garantia de 90 (noventa) dias sobre os serviços de mão de obra executados, e "
-                    "garantia legal sobre os materiais por ela fornecidos.")),
+             texto="A {empresa} oferece garantia sobre os serviços executados, conforme o prazo combinado e a legislação aplicável."),
         dict(titulo="OBSERVAÇÕES COMERCIAIS IMPORTANTES", texto=""),
     ],
 }
 
-# ("espaco" = pontos extras antes do titulo da secao, so para reproduzir o espacamento exato do PDF de referencia.)
-# Reproduz, campo a campo, a proposta "Nº 787 - Obra Kitnets (20 unidades)" (PDF de referencia da ACRS).
+# Exemplo de proposta (todos os dados sao ficticios; so serve para mostrar como o documento fica)
 EXEMPLO_PROPOSTA = {
-    "numero": 787, "data": "2026-10-05", "validade_dias": 15,
-    "titulo": "Projeto e Execução Elétrica - Obra Kitnets (20 unidades)",
+    "numero": 1, "data": "2026-01-15", "validade_dias": 15,
+    "titulo": "Prestação de Serviços - Projeto de Exemplo",
     "aos_cuidados": "Nome do Cliente",
     "cliente_nome": "Nome do Cliente",
-    "objeto": ("Prestação de serviços de engenharia elétrica contemplando a elaboração do projeto elétrico completo, "
-               "execução das instalações elétricas internas (mão de obra) e o fornecimento completo (material, trâmite e "
-               "execução) do padrão de entrada de energia para o complexo habitacional de 20 kitnets e áreas comuns."),
+    "objeto": ("Prestação de serviços contemplando o levantamento das necessidades, o planejamento, a execução e a entrega "
+               "do projeto descrito nesta proposta, com fornecimento de mão de obra e acompanhamento até a conclusão."),
     "escopo_intro": "O escopo a ser executado pela {empresa} compreende as seguintes etapas:",
     "escopo": [
-        dict(titulo="Projeto Elétrico",
-             texto=("Elaboração do projeto elétrico completo e detalhado para a obra, dimensionando cargas, circuitos, "
-                    "infraestrutura e proteções."), topicos=""),
-        dict(titulo="Entrada de Energia (200A) - Fornecimento Completo",
-             texto=("Fornecimento de todos os materiais e mão de obra (via empresa parceira Bom Pastor) para montagem do "
-                    "padrão de entrada, contemplando: escavação do buraco e instalação do poste, caixa de medição, "
-                    "cabeamento e infraestrutura com espera para saída subterrânea. Inclui a elaboração e apresentação "
-                    "da DCA (Declaração de Carga) para aprovação junto à COPEL e solicitação de liberação de rede."),
-             topicos=""),
-        dict(titulo="Infraestrutura e Alimentação Principal",
-             texto=("Execução de infraestrutura e passagem do cabeamento alimentador desde o padrão de entrada de energia "
-                    "até o Quadro Geral de Baixa Tensão (QGBT), incluindo a escavação necessária para a passagem da "
-                    "tubulação neste trecho."), topicos=""),
-        dict(titulo="Montagem e Distribuição (QGBT)",
-             texto=("Montagem do QGBT e execução da distribuição dos cabos alimentadores para os painéis individuais "
-                    "(QDCs) de cada uma das 20 kitnets, além da alimentação do painel de serviços da área comum."),
-             topicos=""),
-        dict(titulo="Instalações Elétricas Internas (Mão de Obra e Intervenção Civil Parcial)",
-             texto=("Execução integral da mão de obra para a parte interna das 20 kitnets e da área comum "
-                    "(churrasqueira, lavanderia e circulação), contemplando:"),
-             topicos=("Escavação da infraestrutura do QGBT até os quadros das kitnets;\n"
-                      "Quebra de paredes para a passagem da infraestrutura interna;\n"
-                      "Chumbamento (fixação com massa) das caixinhas de luz, passagem e tubulações;\n"
-                      "Passagem de fiação;\n"
-                      "Instalação e fechamento dos quadros de distribuição internos (QDCs);\n"
-                      "Instalação de acabamentos (tomadas e interruptores).")),
+        dict(titulo="Levantamento e Planejamento",
+             texto=("Visita técnica, levantamento das necessidades do cliente e definição do plano de trabalho, com "
+                    "cronograma e responsáveis."), topicos=""),
+        dict(titulo="Execução dos Serviços",
+             texto=("Realização dos serviços descritos nesta proposta, com equipe qualificada, materiais e ferramentas "
+                    "adequados, seguindo as boas práticas e as normas aplicáveis, contemplando:"),
+             topicos=("Preparação do local e organização dos materiais;\n"
+                      "Execução das atividades conforme o escopo contratado;\n"
+                      "Acompanhamento e registro do andamento;\n"
+                      "Conferência final de cada etapa concluída.")),
+        dict(titulo="Testes e Entrega",
+             texto=("Verificação do funcionamento e da qualidade do que foi executado, entrega do serviço concluído e "
+                    "orientações de uso ao cliente."), topicos=""),
+        dict(titulo="Suporte Pós-Entrega",
+             texto="Atendimento para dúvidas e correções dentro do período de garantia.", topicos=""),
     ],
-    "escopo_nota": ("Nota: Todas as instalações seguirão rigorosamente o quantitativo e o layout definidos no projeto "
-                    "elétrico elaborado nesta proposta."),
+    "escopo_nota": "Nota: Os quantitativos e as atividades considerados restringem-se ao descrito nesta proposta.",
     "secoes_pre": [
-        dict(titulo="DOCUMENTOS E PROJETOS CONSIDERADOS", espaco=19.0,
-             texto=("Plantas arquitetônicas de layout das 20 unidades e áreas comuns fornecidas pelo cliente.\n\n"
-                    "Levantamento de necessidades repassado em reunião técnica")),
-        dict(titulo="PREMISSAS TÉCNICAS", espaco=2.0,
-             texto=("O fornecimento de materiais elétricos por parte da {empresa} se limita exclusivamente à etapa da "
-                    "Entrada de Energia 200A. A argamassa/cimento para o chumbamento das caixinhas e tubos deverá ser "
-                    "fornecida pelo contratante.\n\n"
-                    "As instalações serão executadas em total conformidade com a ABNT NBR 5410 (Instalações Elétricas de "
-                    "Baixa Tensão) e normativas vigentes da COPEL")),
+        dict(titulo="DOCUMENTOS E INFORMAÇÕES CONSIDERADOS",
+             texto=("Informações e documentos fornecidos pelo cliente.\n\n"
+                    "Levantamento de necessidades realizado em reunião técnica.")),
+        dict(titulo="PREMISSAS",
+             texto=("Os valores consideram o escopo descrito nesta proposta. Alterações de escopo serão avaliadas e "
+                    "orçadas à parte.")),
         dict(titulo="FORA DO ESCOPO",
-             texto=("Fornecimento de materiais elétricos (cabos, quadros, disjuntores, eletrodutos, tomadas, etc.) para "
-                    "as instalações internas, montagem do QGBT e infraestrutura a partir da medição.\n\n"
-                    "Taxas, boletos ou cobranças de participação financeira emitidas pela COPEL para adequação/reforço "
-                    "da rede externa.\n\n"
-                    "Obras civis de recomposição e acabamento: O fechamento das valetas escavadas, o fechamento das "
-                    "quebras de parede (reboco), concretagem, recomposição de pisos, forros, pintura e acabamentos "
-                    "finais NÃO estão inclusos no escopo da {empresa}.\n\n"
-                    "Fornecimento e instalação de luminárias decorativas, chuveiros, fitas de LED ou eletrodomésticos.")),
+             texto=("Itens, materiais e serviços não descritos nesta proposta.\n\n"
+                    "Taxas, licenças e tarifas de terceiros, quando aplicáveis.")),
         dict(titulo="RESPONSABILIDADE DA CONTRATANTE",
-             texto=("Execução do fechamento civil (recomposição de valetas, reboco, concretagem de pisos e pintura) de "
-                    "todas as quebras e escavações realizadas pela equipe da {empresa}.\n\n"
-                    "Fornecimento de cimento/argamassa/areia necessários apenas para o chumbamento inicial das caixinhas "
-                    "e tubulações pela {empresa}.\n\n"
-                    "Pagamento de eventuais taxas e boletos de participação financeira gerados pela COPEL relativos à "
-                    "obra na rede da concessionária.\n\n"
-                    "Fornecimento no canteiro de obras de todos os materiais elétricos especificados para a rede interna "
-                    "e montagem de quadros, em tempo hábil para não paralisar a mão de obra.\n\n"
-                    "Liberação irrestrita das frentes de trabalho e disponibilização de ponto de energia e água.")),
+             texto=("Fornecer as informações e os acessos necessários à execução dos serviços.\n\n"
+                    "Liberar as frentes de trabalho nas datas combinadas.\n\n"
+                    "Efetuar os pagamentos nas condições acordadas.")),
         dict(titulo="RESPONSABILIDADE DA {EMPRESA}",
              texto=("Executar os serviços com qualidade, empregando mão de obra qualificada e ferramentas adequadas.\n\n"
-                    "Garantir a utilização de Equipamentos de Proteção Individual (EPIs) por toda a equipe.\n\n"
-                    "Conduzir os trâmites burocráticos e técnicos (DCA) junto à COPEL para a viabilização da ligação.")),
+                    "Cumprir os prazos combinados e as normas de segurança aplicáveis.")),
         dict(titulo="PRAZO DE EXECUÇÃO",
-             texto=("O prazo estimado para a execução dos serviços internos é de 30 dias, contados a partir do início da "
-                    "obra e da disponibilização dos materiais pelo contratante.\n"
-                    "O prazo da ligação de energia seguirá o cronograma normativo da COPEL.")),
-        dict(titulo="RESPONSABILIDADE TÉCNICA",
-             texto=("A {empresa} emitirá as devidas Anotações de Responsabilidade Técnica (ART) referentes ao projeto "
-                    "elétrico e à execução dos serviços, garantindo o respaldo de engenharia para a obra.")),
+             texto=("O prazo estimado para a execução dos serviços é de 30 dias, contados a partir da aprovação da "
+                    "proposta e da disponibilização das informações necessárias.")),
     ],
     "itens": [
-        ("Entrada de Energia 200A (Fornecimento completo de materiais, escavação/poste, aprovação Copel e execução via "
-         "Bom Pastor)", 8140.00),
-        ("Projeto Elétrico - Obra Kitnets", 1351.00),
-        ("Execução - Montagem do QGBT (Exclusivo Mão de Obra, sem fornecimento da caixa, componentes e barramentos)",
-         2700.00),
-        ("Execução - Mão de Obra de Infraestrutura, Escavação e Cabeamento (Entrada até QGBT)", 1288.00),
-        ("Execução - Mão de Obra Instalações Elétricas Internas, Escavação, Quebra e Chumbamento (20 Kitnets e Áreas "
-         "Comuns)", 10356.00),
+        ("Levantamento e planejamento", 1500.00),
+        ("Execução dos serviços - etapa 1", 4800.00),
+        ("Execução dos serviços - etapa 2", 3900.00),
+        ("Testes, entrega e orientações de uso", 1800.00),
     ],
     "parcelas": [
-        dict(rotulo="Entrada", valor=7000.00,
-             detalhe="no aceite da proposta, referente aos custos iniciais e Entrada de Energia"),
-        dict(rotulo="Parcela 2", valor=5611.67, detalhe="30 dias após o aceite"),
-        dict(rotulo="Parcela 3", valor=5611.67, detalhe="60 dias após o aceite"),
-        dict(rotulo="Parcela 4", valor=5611.66, detalhe="90 dias após o aceite"),
+        dict(rotulo="Entrada", valor=3600.00, detalhe="30% no aceite da proposta"),
+        dict(rotulo="Parcela 2", valor=4200.00, detalhe="30 dias após o aceite"),
+        dict(rotulo="Parcela 3", valor=4200.00, detalhe="60 dias após o aceite"),
     ],
     "secoes_pos": [
         dict(titulo="VALIDADE DA PROPOSTA",
              texto="Esta proposta comercial é válida por {validade_dias} dias corridos a partir da data de sua emissão."),
         dict(titulo="GARANTIA",
-             texto=("A {empresa} oferece garantia de 90 (noventa) dias sobre os serviços de mão de obra executados, e "
-                    "garantia legal sobre os materiais fornecidos para o padrão de entrada. A garantia não cobre defeitos "
-                    "de fabricação dos materiais da rede interna fornecidos pelo cliente.")),
-        dict(titulo="OBSERVAÇÕES COMERCIAIS IMPORTANTES", nova_pagina=True,
-             texto=("PONTO DE ATENÇÃO (CUSTOS COPEL): Ressaltamos que, durante a solicitação de liberação de rede, a "
-                    "COPEL poderá identificar a necessidade de adequações ou obras na rede externa pública para atender a "
-                    "nova demanda de 200A. Caso a concessionária gere cobrança de participação financeira parcial ou total "
-                    "sobre esta obra de rede, o custo será de inteira responsabilidade da Contratante, não estando "
-                    "contemplado nos valores desta proposta.\n\n"
-                    "O quantitativo de pontos de tomada e iluminação das kitnets será o definido no projeto elétrico "
-                    "(Item 2). Solicitações de acréscimo de pontos após o início das obras estarão sujeitas à revisão "
-                    "comercial (aditivo).")),
+             texto="A {empresa} oferece garantia sobre os serviços executados, conforme o prazo combinado e a legislação aplicável."),
+        dict(titulo="OBSERVAÇÕES COMERCIAIS IMPORTANTES",
+             texto=("Solicitações de acréscimo de itens ou de atividades após o início dos serviços estarão sujeitas à "
+                    "revisão comercial (aditivo).")),
     ],
     "fecho": FECHO_PADRAO,
     "assinatura1": "Nome do Cliente (Resp.)",

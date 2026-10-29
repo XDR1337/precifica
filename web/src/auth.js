@@ -239,14 +239,14 @@ P.auth = {
     try { localStorage.setItem(k, String(Date.now())); } catch (e) { /* ok */ }
     await this.shareSupport();
   },
-  /** Empresa recem-criada: identidade propria (sem os dados da ACRS) e um logotipo simples com o nome. */
+  /** Empresa recem-criada: identidade propria e um logotipo simples com o nome. */
   initCompany(db) {
     this.brand(db, this.pendingName);
     delete this.s.pending; this.save();
     this.editAcc((a) => { delete a.nova; }).catch(() => {});
     this.pendingName = "";
   },
-  /** Depois de "Apagar todos os dados": volta a identidade da empresa (nome + logotipo simples), sem dados da ACRS. */
+  /** Depois de "Apagar todos os dados": volta a identidade da empresa (nome + logotipo simples). */
   resetIdentity(db) { if (this.active && this.s.empresa) this.brand(db, this.s.empresa); },
   brand(db, nome) {
     const sigla = nome.split(/\s+/)[0];
@@ -531,7 +531,7 @@ P.auth = {
   },
   /** Cobre a tela com a animacao enquanto algo e' criado. Devolve um objeto com close(). */
   loader(msg, steps) {
-    const el = h("div", { class: "auth", style: { zIndex: 320 } }, h("div", { class: "auth-card" }, h("div", { class: "auth-brand" }, h("img", { src: P.LOGO, alt: "" }), h("div", {}, h("b", { text: "Precifica" }), h("span", { text: "Precificação e propostas" }))), this.loaderEl(msg, steps)));
+    const el = h("div", { class: "auth", style: { zIndex: 320 } }, h("div", { class: "auth-card" }, h("div", { class: "auth-brand" }, h("img", { src: P.LOGO, alt: "" }), h("span", { text: "Precificação e propostas" })), this.loaderEl(msg, steps)));
     document.body.append(el);
     return { close: () => el.remove() };
   },
@@ -557,7 +557,7 @@ P.auth = {
     if (!this.el) return;
     const el = this.el, card = h("div", { class: "auth-card" });
     el.replaceChildren(card);
-    card.append(h("div", { class: "auth-brand" }, h("img", { src: P.LOGO, alt: "" }), h("div", {}, h("b", { text: "Precifica" }), h("span", { text: "Precificação e propostas" }))));
+    card.append(h("div", { class: "auth-brand" }, h("img", { src: P.LOGO, alt: "" }), h("span", { text: "Precificação e propostas" })));
     if (this.busy) { card.append(this.loaderEl(this.busy, this.busySteps)); return; }
     if (this.notice) card.append(h("div", { class: "callout danger" }, h("p", { class: "msg", text: this.notice })));
     if (!this.connected()) return this.viewConnect(card);

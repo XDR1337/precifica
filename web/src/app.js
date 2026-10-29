@@ -72,7 +72,7 @@ P.app = {
     }
     this.companyLbl = h("b", { class: "company" });
     const side = h("aside", { class: "side", id: "side" },
-      h("div", { class: "brand" }, h("div", { class: "logo-card" }, (this.sideLogo = h("img", { src: P.LOGO, alt: "Logotipo" }))), h("div", { class: "bt" }, h("b", { text: "Precifica" }), h("span", { text: "PRECIFICAÇÃO E PROPOSTAS" }))),
+      h("div", { class: "brand" }, h("div", { class: "logo-card" }, (this.sideLogo = h("img", { src: P.LOGO, alt: "Logotipo" }))), h("div", { class: "bt" }, (this.brandName = h("b", { text: "Precifica" })), h("span", { text: "PRECIFICAÇÃO E PROPOSTAS" }))),
       nav, h("div", { class: "sfoot" }, P.syncBadge(), this.companyLbl, P.auth.shellUser(), h("span", { text: `v${P.APP_VERSION} · por ${P.APP_AUTHOR}` })));
     this.topTitle = h("span", { class: "tt" });
     const top = h("header", { class: "top" }, h("button", { type: "button", class: "burger", "aria-label": "Abrir menu", text: "☰", onClick: () => document.body.classList.toggle("nav-open") }), this.topTitle, h("span", { class: "grow" }), P.syncBadge());
@@ -176,6 +176,7 @@ P.app = {
     const txt = c.empresa_fantasia || c.empresa_nome || "";
     if (this.companyLbl.textContent !== txt) this.companyLbl.textContent = txt;
     P.applyTheme(c);
+    if (this.brandName) this.brandName.style.display = P.logoDoc(c) ? "" : "none";     // o logotipo do Precifica ja traz o nome
     const logo = P.logoApp(c);       // logotipo escolhido em Configuracoes vale no menu todo
     if (this.sideLogo && this.sideLogo._src !== logo) { this.sideLogo.src = logo; this.sideLogo._src = logo; }
   },

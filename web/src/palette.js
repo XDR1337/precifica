@@ -53,8 +53,7 @@ P.palette = (cfg) => {
 P.docVars = (pal) => `--c1:${pal.c1};--c2:${pal.c2};--c2d:${pal.c2d};--c2s:${pal.c2s};--c1s:${pal.c1s}`;
 
 /** Logotipo para os documentos: o da empresa; sem ele, so o nome (a marca do Precifica nao vai nos documentos do cliente). */
-P.logoDoc = (cfg) => (cfg.empresa_logo && String(cfg.empresa_logo).startsWith("data:") ? cfg.empresa_logo
-  : /acrs/i.test(String(cfg.empresa_fantasia || cfg.empresa_nome || "")) ? P.LOGO_ACRS : "");
+P.logoDoc = (cfg) => (cfg.empresa_logo && String(cfg.empresa_logo).startsWith("data:") ? cfg.empresa_logo : "");
 /** Logotipo para o menu do app: o da empresa ou a marca do Precifica. */
 P.logoApp = (cfg) => P.logoDoc(cfg) || P.LOGO;
 

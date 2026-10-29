@@ -21,7 +21,6 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from precifica import seed                      # noqa: E402
-from precifica.assets import ACRS_LOGO_PNG       # noqa: E402
 from precifica.core import APP_AUTHOR, APP_VERSION  # noqa: E402
 
 SRC = os.path.join(HERE, "src")
@@ -63,12 +62,14 @@ def seed_js() -> str:
         "ENCARGOS_PADRAO": seed.ENCARGOS_PADRAO, "CONFIG_PADRAO": seed.CONFIG_PADRAO, "EXEMPLO": seed.EXEMPLO,
         "FECHO_PADRAO": seed.FECHO_PADRAO, "MODELO_PROPOSTA": seed.MODELO_PROPOSTA, "EXEMPLO_PROPOSTA": seed.EXEMPLO_PROPOSTA,
     }
-    logo_acrs = "data:image/png;base64," + base64.b64encode(ACRS_LOGO_PNG).decode("ascii")
-    with open(os.path.join(HERE, "brand", "precifica-marca.svg"), "rb") as f:
-        logo = "data:image/svg+xml;base64," + base64.b64encode(f.read()).decode("ascii")
+    def svg(nome):
+        with open(os.path.join(HERE, "brand", nome), "rb") as f:
+            return "data:image/svg+xml;base64," + base64.b64encode(f.read()).decode("ascii")
+    logo, marca = svg("precifica-logo.svg"), svg("precifica-marca.svg")
+    data["CONFIG_PADRAO"] = {**data["CONFIG_PADRAO"], "empresa_nome": "", "empresa_fantasia": "", "empresa_sigla": "", "empresa_cidade": "", "empresa_uf": ""}   # a empresa informa os proprios dados
     return (f"P.SEED = {json.dumps(data, ensure_ascii=False, separators=(',', ':'))};\n"
             f"P.LOGO = {json.dumps(logo)};\n"
-            f"P.LOGO_ACRS = {json.dumps(logo_acrs)};\n"
+            f"P.LOGO_MARCA = {json.dumps(marca)};\n"
             f"P.SYNC_DROPBOX_KEY = {json.dumps(dropbox_key())};\n"
             'P.SYNC_DROPBOX_FOLDER = "";\n'   # a pasta unica (Precifica-Equipe) nao e mais usada: cada empresa tem a sua
             f"P.ADMIN_IDS = {json.dumps([x.strip() for x in _cfg('admin_ids.txt', 'PRECIFICA_ADMIN_IDS').replace(chr(10), ',').split(',') if x.strip()])};\n"

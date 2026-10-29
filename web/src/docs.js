@@ -1,6 +1,6 @@
 "use strict";
 /* Precifica Web - documentos para imprimir / salvar em PDF (substitui pdfs.py):
-   relatorio completo, tabela de precos, analise de preco e proposta tecnica e comercial (modelo ACRS). */
+   relatorio completo, tabela de precos, analise de preco e proposta tecnica e comercial. */
 P.docs = {};
 const { fnum: dfnum, money: dmoney, num: dnum, pct: dpct, esc: desc, safeDiv: dsafe } = P;
 
@@ -213,7 +213,7 @@ P.docs.donut = function (a, sug) {
 // ------------------------------------------------------------------ tabela de precos
 P.docs.prices = (e) => { const d = P.docs.report(e, ["precos"]); d.title = "Tabela de preços"; return d; };
 
-// ------------------------------------------------------------------ proposta tecnica e comercial (modelo ACRS)
+// ------------------------------------------------------------------ proposta tecnica e comercial
 P.docs.proposal = function (cfg, prop, itens) {
   const ctx = P.proposalContext(cfg, prop, itens);
   const tot = P.proposalTotals(prop, itens, cfg);
