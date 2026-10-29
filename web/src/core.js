@@ -692,7 +692,9 @@ P.sub = function (texto, ctx) {
   return s;
 };
 P.paras = (t) => String(t ?? "").replace(/\r/g, "").trim().split(/\n\s*\n/).map((p) => p.replace(/^\n+|\n+$/g, "")).filter((p) => p.trim());
-P.rich = (t) => P.esc(t).replace(/\*\*([\s\S]+?)\*\*/g, "<b>$1</b>").replace(/\n/g, "<br>");
+// marcas do texto das propostas: **negrito**  __italico__  ++sublinhado++  ~~tachado~~
+P.rich = (t) => P.esc(t).replace(/\*\*([\s\S]+?)\*\*/g, "<b>$1</b>").replace(/__([\s\S]+?)__/g, "<i>$1</i>").replace(/\+\+([\s\S]+?)\+\+/g, "<u>$1</u>").replace(/~~([\s\S]+?)~~/g, "<s>$1</s>").replace(/\n/g, "<br>");
+P.plain = (t) => String(t ?? "").replace(/\*\*|__|\+\+|~~/g, "");
 P.modeloTextos = function (cfg) {
   let m = null;
   try { m = JSON.parse(cfg.proposta_modelo_json || ""); } catch (e) { m = null; }

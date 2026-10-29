@@ -130,6 +130,8 @@ P.inp = function (f, value) {
       const v = await P.ask("Nova " + (P.LISTAS[f.listKey].item), [{ key: "nome", label: "Nome", required: true }], {}, { ok: "Adicionar" });
       if (v) fill(P.lists.add(f.listKey, v.nome)); else el.value = prev;
     });
+  } else if (kind === "rich") {
+    el = P.richEditor(f, value);
   } else if (kind === "combo") {
     const id = "dl" + Math.random().toString(36).slice(2, 8);
     el = h("input", { class: "in", type: "text", list: id, autocomplete: "off", value: value == null ? "" : String(value) });
@@ -146,7 +148,7 @@ P.inp = function (f, value) {
 };
 P.fieldValue = function (f, el) {
   const kind = f.kind || "text";
-  if (kind === "textarea") return el.value.trim();
+  if (kind === "textarea" || kind === "rich") return el.value.trim();
   const raw = el.value.trim();
   if (kind === "list") return raw === "__novo__" ? "" : raw;
   if (kind === "num" || kind === "money" || kind === "pct") {
@@ -159,12 +161,69 @@ P.fieldValue = function (f, el) {
   return raw;
 };
 P.field = function (f, el, cls = "") {
-  const wrap = h("label", { class: "fld " + cls + (f.span === 2 ? " span2" : "") },
+  const wrap = h(el._rich ? "div" : "label", { class: "fld " + cls + (f.span === 2 ? " span2" : "") },
     h("span", { class: "fl", text: f.label + (f.required ? " *" : "") }),
     f.kind === "money" ? h("div", { class: "ad" }, h("i", { text: "R$" }), el) : f.kind === "pct" ? h("div", { class: "ad r" }, el, h("i", { text: "%" })) : el,
     el._dl || null,
     f.help ? h("span", { class: "fh", text: f.help }) : null);
   return wrap;
+};
+
+/** Editor de texto estilo Word (negrito, italico, sublinhado, tachado, marcador, desfazer) que guarda o texto com marcas simples:
+ *  **negrito**  __italico__  ++sublinhado++  ~~tachado~~  (as mesmas que P.rich entende na impressao). `.value` le/grava essas marcas. */
+P.richEditor = function (f, value) {
+  const ed = h("div", { class: "rte-ed", contenteditable: "true", role: "textbox", "aria-multiline": "true", spellcheck: "true", style: { minHeight: (f.height || 90) + "px" } });
+  const MARK = { B: "**", STRONG: "**", I: "__", EM: "__", U: "++", S: "~~", STRIKE: "~~", DEL: "~~" };
+  const toMarkup = () => {
+    let out = "";
+    const nl = () => { if (out && !out.endsWith("\n")) out += "\n"; };
+    const walk = (n) => {
+      if (n.nodeType === 3) { out += n.nodeValue.replace(/[\u00a0\u200b]/g, " "); return; }
+      if (n.nodeType !== 1) return;
+      const t = n.tagName;
+      if (t === "BR") { out += "\n"; return; }
+      const block = t === "DIV" || t === "P" || t === "LI" || t === "UL" || t === "OL";
+      if (block) nl();
+      if (t === "LI") out += "• ";
+      const ini = out.length;
+      n.childNodes.forEach(walk);
+      if (MARK[t]) {                                   // espacos ficam fora das marcas e marcas vazias somem (evita "** texto**" e "****")
+        const dentro = out.slice(ini), m = /^(\s*)([\s\S]*?)(\s*)$/.exec(dentro);
+        out = out.slice(0, ini) + (m[2] ? m[1] + MARK[t] + m[2] + MARK[t] + m[3] : dentro);
+      }
+      if (block) nl();
+    };
+    ed.childNodes.forEach(walk);
+    return out.replace(/\n+$/, "");
+  };
+  const run = (cmd, arg) => { ed.focus(); try { document.execCommand("styleWithCSS", false, false); } catch (e) { /* ok */ } document.execCommand(cmd, false, arg); sync(); };
+  const BTN = [["bold", h("b", { text: "N" }), "Negrito (Ctrl+B)"], ["italic", h("i", { text: "I" }), "Itálico (Ctrl+I)"], ["underline", h("u", { text: "S" }), "Sublinhado (Ctrl+S ou Ctrl+U)"], ["strikeThrough", h("s", { text: "T" }), "Tachado (Ctrl+Shift+X)"]];
+  const btns = {};
+  const mk = (label, title, fn, cmd) => { const b = h("button", { type: "button", class: "rte-b", title, "aria-label": title }, label); b.addEventListener("mousedown", (e) => e.preventDefault()); b.addEventListener("click", fn); if (cmd) btns[cmd] = b; return b; };
+  const bar = h("div", { class: "rte-bar" }, BTN.map(([cmd, label, title]) => mk(label, title, () => run(cmd), cmd)),
+    h("span", { class: "rte-sep" }),
+    mk("•", "Marcador de lista", () => run("insertText", "• ")), mk("Tx", "Limpar a formatação do texto selecionado", () => run("removeFormat")),
+    h("span", { class: "rte-sep" }), mk("↶", "Desfazer (Ctrl+Z)", () => run("undo")), mk("↷", "Refazer (Ctrl+Y)", () => run("redo")));
+  const vars = h("select", { class: "rte-vars", title: "Inserir um valor que o programa preenche sozinho" }, h("option", { value: "", text: "＋ Inserir…" }),
+    [["{empresa}", "Nome da empresa"], ["{cliente}", "Nome do cliente"], ["{numero}", "Nº da proposta"], ["{validade_dias}", "Validade (dias)"], ["{total}", "Valor total"]].map(([v, t]) => h("option", { value: v, text: t })));
+  vars.addEventListener("change", () => { if (vars.value) run("insertText", vars.value); vars.value = ""; });
+  bar.append(vars);
+  const sync = () => { for (const [cmd, b] of Object.entries(btns)) { let on = false; try { on = document.queryCommandState(cmd); } catch (e) { /* ok */ } b.classList.toggle("on", on); } };
+  ed.addEventListener("keydown", (e) => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    const k = e.key.toLowerCase();
+    const cmd = e.shiftKey ? (k === "x" ? "strikeThrough" : null) : ({ b: "bold", i: "italic", u: "underline", s: "underline" })[k];   // Ctrl+S = sublinhado (como no Word em portugues)
+    if (!cmd) return;
+    e.preventDefault(); run(cmd);
+  });
+  ed.addEventListener("paste", (e) => { e.preventDefault(); const t = (e.clipboardData || window.clipboardData).getData("text/plain"); document.execCommand("insertText", false, t); });
+  for (const ev of ["keyup", "mouseup", "focus", "input", "touchend"]) ed.addEventListener(ev, sync);
+  const root = h("div", { class: "rte" }, bar, ed);
+  root._rich = true;
+  root.focus = () => ed.focus();
+  Object.defineProperty(root, "value", { get: toMarkup, set: (v) => { ed.innerHTML = P.rich(v || ""); } });
+  root.value = value == null ? "" : String(value);
+  return root;
 };
 
 /** Formulario em janela. Retorna Promise com os valores (ou null se cancelado).

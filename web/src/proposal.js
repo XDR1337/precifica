@@ -13,21 +13,21 @@ P.diasParaVencer = (p, hoje) => {
   const h0 = new Date(hoje); h0.setHours(0, 0, 0, 0);
   return Math.round((d - h0) / 864e5);
 };
-const resumo = (t, n = 95) => { t = String(t || "").split(/\s+/).filter(Boolean).join(" "); return t.length <= n ? t : t.slice(0, n - 1) + "…"; };
-const AJUDA_TEXTO = "Dica: use {empresa}, {validade_dias}, {numero}, {total} e {cliente} para o programa preencher sozinho  ·  **texto** fica em negrito  ·  uma linha em branco separa os parágrafos";
+const resumo = (t, n = 95) => { t = P.plain(t).split(/\s+/).filter(Boolean).join(" "); return t.length <= n ? t : t.slice(0, n - 1) + "…"; };
+const AJUDA_TEXTO = "Dica: use os botões N, I, S e T (ou Ctrl+B, Ctrl+I, Ctrl+S) para formatar  ·  “＋ Inserir…” coloca o nome da empresa, do cliente, o total etc.  ·  uma linha em branco separa os parágrafos";
 const ESCOPO_FIELDS = [
   { key: "titulo", label: "Título da etapa", required: true, span: 2, help: "Ex.: Projeto Elétrico  ·  Aparece antes dos dois pontos: “Projeto Elétrico: descrição…”" },
-  { key: "texto", label: "Descrição da etapa", kind: "textarea", height: 140, span: 2 },
-  { key: "topicos", label: "Tópicos com seta ➢ (um por linha) – opcional", kind: "textarea", height: 110, span: 2, help: "Use para listar itens abaixo da descrição, como no escopo das instalações internas." }];
+  { key: "texto", label: "Descrição da etapa", kind: "rich", height: 140, span: 2 },
+  { key: "topicos", label: "Tópicos com seta ➢ (um por linha) – opcional", kind: "rich", height: 110, span: 2, help: "Use para listar itens abaixo da descrição, como no escopo das instalações internas." }];
 const SECAO_FIELDS = [
   { key: "titulo", label: "Título da seção", required: true, span: 2, help: "Aparece em negrito e sublinhado. Ex.: PREMISSAS TÉCNICAS, FORA DO ESCOPO, GARANTIA" },
-  { key: "texto", label: "Texto", kind: "textarea", height: 230, span: 2, help: AJUDA_TEXTO },
+  { key: "texto", label: "Texto", kind: "rich", height: 230, span: 2, help: AJUDA_TEXTO },
   { key: "nova_pagina", label: "Começar esta seção em uma nova página?", kind: "choice", options: ["Não", "Sim"], span: 2 }];
 const PARCELA_FIELDS = [
   { key: "rotulo", label: "Nome da parcela", required: true, help: "Ex.: Entrada, Parcela 2" }, { key: "valor", label: "Valor (R$)", kind: "money", min: 0 },
   { key: "detalhe", label: "Detalhe entre parênteses", span: 2, help: "Ex.: 30 dias após o aceite  ·  sai impresso como “Parcela 2: R$ 5.611,67 (30 dias após o aceite).”" }];
 const ITEM_FIELDS = [
-  { key: "descricao", label: "Descrição do item", kind: "textarea", height: 90, required: true, span: 2 }, { key: "quantidade", label: "Quantidade", kind: "num", min: 0 },
+  { key: "descricao", label: "Descrição do item", kind: "rich", height: 90, required: true, span: 2 }, { key: "quantidade", label: "Quantidade", kind: "num", min: 0 },
   { key: "unidade", label: "Unidade", kind: "list", listKey: "unidades_proposta" },
   { key: "valor_unit", label: "Valor unitário (R$)", kind: "money", min: 0, span: 2, help: "No PDF sai só o valor do item (quantidade × valor unitário). Quando a quantidade não é 1, ela aparece entre parênteses na descrição." }];
 const secaoToForm = (it) => ({ ...it, nova_pagina: it.nova_pagina ? "Sim" : "Não" });
@@ -105,7 +105,7 @@ class ProposalEditor {
 
   // ---- blocos de tela
   ent(label, span = 1) { const f = { label, span }; const el = P.inp(f, ""); return { el, wrap: P.field(f, el) }; }
-  txt(label, height, help) { const f = { label, kind: "textarea", height, help, span: 2 }; const el = P.inp(f, ""); return { el, wrap: P.field(f, el) }; }
+  txt(label, height, help, simples) { const f = { label, kind: simples ? "textarea" : "rich", height, help, span: 2 }; const el = P.inp(f, ""); return { el, wrap: P.field(f, el) }; }
   tabDados(t) {
     const a = this.ent("Nº da proposta"), b = this.ent("Data (dd/mm/aaaa)"), c = this.ent("Validade (dias)");
     const st = P.inp({ kind: "choice", options: SEED.STATUS_PROPOSTA }, "Rascunho");
@@ -163,7 +163,7 @@ class ProposalEditor {
     this.l_parc = P.listEditor({ items: parcelas, fields: PARCELA_FIELDS, dialogTitle: "parcela", defaults: { rotulo: "Parcela", valor: 0, detalhe: "" }, addText: "+ Adicionar parcela",
       empty: "Sem parcelas. Use “Gerar entrada + parcelas…” ou “+ Adicionar parcela”.", onChange: () => this.parcInfo(),
       summary: (it) => ({ title: it.rotulo || "", sub: it.detalhe || "", right: money(it.valor) }) });
-    const det = this.txt("Texto livre de pagamento (opcional – só sai se não houver parcelas)", 56);
+    const det = this.txt("Texto livre de pagamento (opcional – só sai se não houver parcelas)", 56, undefined, true);
     this.t_det = det.el;
     const pay = card(cardTitle("Condições de pagamento", "Cada parcela sai como “Entrada: R$ 7.000,00 (no aceite da proposta).”", btn("Gerar entrada + parcelas…", () => this.genParcelas(), "secondary sm")), this.l_parc.el, this.lbl_parc, det.wrap);
     t.append(inv, pay);

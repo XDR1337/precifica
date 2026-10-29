@@ -401,3 +401,12 @@ select.in{padding-right:8px}
 
 /* e-mail e ID da conta, faceis de copiar */
 .copybox{display:flex;flex-direction:column;gap:8px;margin:6px 0}.copyrow{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--bd);border-radius:10px;padding:8px 10px;background:var(--bg)}.copyrow>div{min-width:0}.copyrow span{display:block}.copyrow code{display:block;font-size:13px;overflow-wrap:anywhere;word-break:break-all;user-select:all;color:var(--ink)}
+
+/* editor de texto das propostas */
+.rte{border:1px solid var(--bd);border-radius:10px;background:#fff;overflow:hidden}.rte:focus-within{border-color:var(--orange);box-shadow:0 0 0 2px rgba(255,153,0,.25)}
+.rte-bar{display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:5px 6px;background:var(--bg);border-bottom:1px solid var(--bd)}
+.rte-b{min-width:34px;height:34px;border:1px solid var(--bd);background:#fff;border-radius:7px;font:inherit;font-size:14px;color:var(--ink);cursor:pointer;padding:0 8px}.rte-b:hover{background:#fff1db}.rte-b.on{background:var(--orange);border-color:var(--orange-h);color:#111A25}
+.rte-sep{width:1px;height:22px;background:var(--bd);margin:0 3px}.rte-vars{height:34px;border:1px solid var(--bd);border-radius:7px;background:#fff;font:inherit;font-size:13px;padding:0 6px;margin-left:auto;max-width:150px}
+.rte-ed{padding:9px 11px;font:inherit;line-height:1.5;outline:none;overflow:auto;max-height:55vh;white-space:pre-wrap;overflow-wrap:anywhere}.rte-ed:empty::before{content:"Digite o texto aqui…";color:var(--subtle)}
+/* uma linha em branco depois de cada titulo da proposta */
+.psec.esc{margin-bottom:11.2pt}.pe.pet{margin-bottom:11.85pt}
