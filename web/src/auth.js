@@ -58,8 +58,8 @@ P.auth = {
     return c ? { limite: lim(c.limite, 1), limiteFunc: lim(c.limite_func, DEF_FUNC) } : null;
   },
   /** A empresa so funciona enquanto o e-mail de quem a criou continua na lista do administrador (sem regras carregadas, nao bloqueia). */
-  async creatorListed(email) {
-    if (!this.policyOn() || !email) return true;
+  async creatorListed(email, acc) {
+    if (!this.policyOn() || !email || (acc && acc.porAdmin)) return true;
     const p = rd(POLICY);
     if (!p || email === this.supportEmail()) return true;
     const h = await this.hashEmail(email);
@@ -85,7 +85,7 @@ P.auth = {
       if (!acc || !Array.isArray(acc.members)) { this.unclaimed.push(c.name); continue; }
       this.accs[c.name] = acc;
       const m = em && acc.members.find((x) => x.email === em);
-      if (m) this.mine.push({ name: c.name, empresa: acc.empresa || nice(c.name), papel: m.papel, suspensa: !!acc.suspensa, bloqueada: !(await this.creatorListed(acc.criador)) });
+      if (m) this.mine.push({ name: c.name, empresa: acc.empresa || nice(c.name), papel: m.papel, suspensa: !!acc.suspensa, bloqueada: !(await this.creatorListed(acc.criador, acc)) });
     }
     d.forced = keep.f; d.folderOk = keep.ok; d.basePath = keep.bp;
   },
@@ -149,7 +149,7 @@ P.auth = {
     if (this.s.kick) { this.notice = this.s.kick; delete this.s.kick; this.save(); }
     if (this.s.folder && this.email() && !this.s.choose) {          // abre direto a ultima empresa (copia local do acesso: funciona sem internet)
       const acc = rd(ACCESS + slugOf(this.s.folder)), m = acc && Array.isArray(acc.members) && acc.members.find((x) => x.email === this.email());
-      if (m && !acc.suspensa && (await this.creatorListed(acc.criador))) { this.me = { u: this.email(), nome: this.email(), email: this.email(), papel: m.papel }; return this.activate(); }
+      if (m && !acc.suspensa && (await this.creatorListed(acc.criador, acc))) { this.me = { u: this.email(), nome: this.email(), email: this.email(), papel: m.papel }; return this.activate(); }
     }
     this.show();
   },
@@ -171,7 +171,11 @@ P.auth = {
       if (!localStorage.getItem(key) && this.connected() && navigator.onLine) {
         this.setBusy("Carregando os dados da empresa…");
         const tk = await P.sync.provider.token(false);
-        if (tk) { const remote = await dbx().read(tk); if (remote && remote.t) localStorage.setItem(key, JSON.stringify(remote)); }
+        if (tk) {
+          const remote = await dbx().read(tk), cached = rd(ACCESS + this.slug());
+          if (remote && remote.t) localStorage.setItem(key, JSON.stringify(remote));
+          else if (cached && cached.nova) this.pendingName = cached.empresa || this.pendingName;
+        }
       }
     } catch (e) { this.notice = "Não foi possível baixar os dados agora: " + e.message; }
     this.hide();
@@ -231,6 +235,24 @@ P.auth = {
     if (!isNew && !localStorage.getItem(key)) { try { const old = localStorage.getItem(P.storeKey("")); if (old) localStorage.setItem(key, old); } catch (e) { /* ok */ } }   // dados que ja estavam neste aparelho
     if (isNew) { this.pendingName = empresa; this.s.pending = empresa; if ((this.companies || []).length) this.s.multi = true; this.save(); }
   },
+  /** O administrador cria uma empresa (para um cliente ou para si). Nao conta no limite de ninguem. */
+  async createByAdmin(empresa, ownerEmail) {
+    const adm = this.email(), owner = String(ownerEmail || "").trim().toLowerCase(), nome = String(empresa || "").trim();
+    if (!nome) throw new Error("Informe o nome da empresa.");
+    if (owner && !/^\S+@\S+\.\S+$/.test(owner)) throw new Error("E-mail do dono inválido.");
+    const dono = owner || adm;
+    if (!dono) throw new Error("Informe o e-mail do dono da empresa (o app ainda não leu o e-mail da sua conta).");
+    const folder = "Precifica-" + slugify(nome);
+    if (folder === "Precifica-") throw new Error("Informe o nome da empresa.");
+    const tk = await this.token(), d = dbx();
+    d.forced = folder; await d.createFolder(tk, folder);
+    const acc = { v: 2, empresa: nome, criador: adm || dono, criado: Date.now(), porAdmin: true, nova: true, members: [{ email: dono, papel: "dono" }] };
+    await d.putJson(tk, d.basePath + "/" + FILE, acc, null);
+    wr(ACCESS + slugOf(folder), acc);
+    let aviso = "";
+    if (owner && owner !== adm) { try { await d.invite(tk, owner); } catch (e) { aviso = "A empresa foi criada, mas o convite do Dropbox para " + owner + " falhou: " + e.message; } }
+    return { folder, aviso };
+  },
   /** Compartilha a pasta da empresa com o e-mail do suporte (administrador), para ele poder ver e ajustar a base. */
   async shareSupport() {
     const sup = this.supportEmail();
@@ -252,6 +274,7 @@ P.auth = {
     const esc = (t) => t.replace(/[<>&"]/g, "");
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120"><rect width="320" height="120" rx="14" fill="#1B2A3D"/><rect x="18" y="62" width="14" height="30" fill="#FF9900"/><rect x="38" y="48" width="14" height="44" fill="#FF9900"/><rect x="58" y="32" width="14" height="60" fill="#FF9900"/><text x="92" y="72" font-family="Arial,sans-serif" font-size="${nome.length > 16 ? 20 : 26}" font-weight="700" fill="#fff">${esc(nome)}</text></svg>`;
     delete this.s.pending; this.save();
+    this.editAcc((a) => { delete a.nova; }).catch(() => {});
     db.setMany({ empresa_nome: nome, empresa_fantasia: nome, empresa_sigla: sigla, empresa_cidade: "", empresa_uf: "", empresa_logo: "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg) });
     this.pendingName = "";
   },
@@ -291,7 +314,7 @@ P.auth = {
     wr(ACCESS + this.slug(), r.data);
     const m = (r.data.members || []).find((x) => x.email === this.me.email);
     await this.loadPolicy();
-    if (!(await this.creatorListed(r.data.criador))) { this.s.kick = "O acesso desta empresa foi encerrado pelo administrador do sistema."; this.leave(true); return; }
+    if (!(await this.creatorListed(r.data.criador, r.data))) { this.s.kick = "O acesso desta empresa foi encerrado pelo administrador do sistema."; this.leave(true); return; }
     if (r.data.suspensa) { this.s.kick = "Esta empresa foi suspensa. Fale com o administrador do sistema."; this.leave(true); return; }
     if (!m || m.papel !== this.me.papel) { this.s.kick = "O seu acesso a esta empresa foi alterado. Entre novamente."; this.leave(true); }
   },
@@ -313,7 +336,7 @@ P.auth = {
   async members(folder) { this.useFolder(folder); const tk = await this.token(), d = dbx(); await d.checkFolder(tk); const r = await d.getJson(tk, d.basePath + "/" + FILE); return r && Array.isArray(r.data.members) ? r.data.members : []; },
   /** Limite de pessoas convidadas: o mesmo para todas as empresas criadas pelo mesmo e-mail. */
   async checkStaffLimit(acc) {
-    if (this.isAdmin() || !this.policyOn() || !acc.criador) return;
+    if (this.isAdmin() || !this.policyOn() || !acc.criador || acc.porAdmin) return;
     const p = rd(POLICY) || await this.loadPolicy();
     const h = await this.hashEmail(acc.criador), e = p && (p.criadores || []).find((x) => x.h === h);
     const limit = lim(e && e.limite_func, DEF_FUNC);

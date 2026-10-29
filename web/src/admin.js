@@ -60,7 +60,15 @@ P.definePage("Administração", {
     };
     drawCompanies();
     out.push(card(cardTitle("Empresas", "Pastas “Precifica-…” que estão no seu Dropbox (compartilhadas com você)."), box,
-      h("div", { class: "bar" }, btn("Atualizar lista", () => drawCompanies(), "secondary sm"))));
+      h("div", { class: "bar" }, btn("+ Criar empresa", async () => {
+        const v = await P.ask("Criar empresa", [{ key: "nome", label: "Nome da empresa", required: true }, { key: "email", label: "E-mail do dono (conta Dropbox)", mode: "email", help: "O dono recebe o convite da pasta e passa a gerenciar a empresa. Deixe em branco para ficar com você. Empresas criadas por você não contam nos limites de ninguém." }], {}, { ok: "Criar empresa" });
+        if (!v) return;
+        try {
+          const r = await A.createByAdmin(v.nome, v.email);
+          if (r.aviso) P.info("Empresa criada", r.aviso, "warn"); else P.ui.toast("Empresa criada");
+          drawCompanies();
+        } catch (e) { err(e); }
+      }), btn("Atualizar lista", () => drawCompanies(), "secondary sm"))));
 
     // ---------------------------------------------------------------- regras (e-mails + teste)
     const rulesBox = h("div", { class: "adm-rows" }, h("p", { class: "fh", text: "Carregando…" }));
