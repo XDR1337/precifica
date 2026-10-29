@@ -16,18 +16,25 @@ P.definePage("Administração", {
 
     // ---------------------------------------------------------------- empresas
     const box = h("div", { class: "adm-rows" }, h("p", { class: "fh", text: "Carregando…" }));
+    // shortcut: a lista de convites recusados fica so neste aparelho; trocar de aparelho mostra o convite de novo ate ser recusado la tambem
+    const lista = (k) => { try { return JSON.parse(localStorage.getItem(k) || "[]"); } catch (e) { return []; } };
+    const ignorados = () => lista("precifica.admin.ign"), aceitos = () => lista("precifica.admin.acc");
+    const guarda = (k, nome) => { try { const l = lista(k); if (!l.includes(nome)) { l.push(nome); localStorage.setItem(k, JSON.stringify(l)); } } catch (e) { /* ok */ } };
     const drawCompanies = async () => {
       let list = [];
       try {
         const tk = await A.token();
         list = await dbx().listCompanies(tk);
-        const ign = (() => { try { return JSON.parse(localStorage.getItem("precifica.admin.ign") || "[]"); } catch (e) { return []; } })();
-        const novos = list.filter((c) => c.pending && c.sid && !ign.includes(c.name.toLowerCase()));
-        if (novos.length && A.supportEmail()) {                       // convites dos clientes para o suporte: aceita sozinho (os que voce recusou ficam de fora)
-          for (const c of novos) await dbx().rpc("sharing/mount_folder", tk, { shared_folder_id: c.sid });
+        const ign = ignorados(), ja = aceitos();
+        // convite que este painel ja aceitou e voltou a ficar pendente = a pasta foi apagada aqui: recusa de vez (senao o Dropbox continua oferecendo)
+        for (const c of list.filter((x) => x.pending && x.sid && ja.includes(x.name.toLowerCase()))) { try { await dbx().declineInvite(tk, c.sid); } catch (e) { /* dono da pasta ou erro: ao menos some do painel */ } guarda("precifica.admin.ign", c.name.toLowerCase()); }
+        const novos = list.filter((c) => c.pending && c.sid && !ja.includes(c.name.toLowerCase()) && !ign.includes(c.name.toLowerCase()));
+        if (novos.length && A.supportEmail()) {                       // convites dos clientes para o suporte: aceita uma vez so (os recusados ou ja aceitos antes ficam de fora)
+          for (const c of novos) { await dbx().rpc("sharing/mount_folder", tk, { shared_folder_id: c.sid }); guarda("precifica.admin.acc", c.name.toLowerCase()); }
           list = await dbx().listCompanies(tk);
         }
       } catch (e) { box.replaceChildren(h("p", { class: "fh", text: "Não foi possível listar: " + e.message })); return; }
+      list = list.filter((c) => !(c.pending && ignorados().includes(c.name.toLowerCase())));      // convites recusados ficam fora da lista e nunca sao aceitos sozinhos
       box.replaceChildren(...(list.length ? list.map((c) => h("div", { class: "auth-row" }, h("div", {}, h("b", { text: nice(c.name) }), h("span", { text: c.name + (c.pending ? " · convite novo" : "") })),
         h("div", { class: "bar" }, btn("Gerenciar", () => gerenciar(c), "primary xs"), c.pending ? null : btn("Backup", async () => { try { P.download(`precifica_${c.name}_${new Date().toISOString().slice(0, 10)}.json`, await A.companyBackup(c.name)); } catch (e) { err(e); } }, "secondary xs"), btn("Abrir", () => A.enterAsAdmin(c.name), "secondary xs"), btn(c.pending ? "Recusar convite" : "Excluir", () => excluir(c), "danger xs")))) : [h("p", { class: "fh", text: "Nenhuma empresa encontrada. Cada empresa precisa compartilhar a pasta “Precifica-…” com a sua conta do Dropbox." })]));
     };
@@ -36,10 +43,10 @@ P.definePage("Administração", {
         if (c.pending && c.sid) {                       // convite que ainda nao foi aceito: recusa sem criar a pasta no seu Dropbox
           if (!(await P.confirm("Recusar convite", `A pasta “${c.name}” está aparecendo como um compartilhamento pendente. Se for de outra conta, o convite é recusado e a pasta dela não é apagada. Continuar?`, "Continuar", true))) return;
           const tk = await A.token();
-          try { const ig = JSON.parse(localStorage.getItem("precifica.admin.ign") || "[]"); ig.push(c.name.toLowerCase()); localStorage.setItem("precifica.admin.ign", JSON.stringify(ig)); } catch (e) { /* ok */ }
+          guarda("precifica.admin.ign", c.name.toLowerCase());
           try { await dbx().declineInvite(tk, c.sid); P.ui.toast("Convite recusado"); }
           catch (e) {
-            if (!e.owner) throw e;
+            if (!e.owner) { P.info("Convite ocultado", "O Dropbox não deixou recusar por aqui, mas o convite foi ocultado deste painel e não será aceito sozinho. Para sumir de vez, recuse em dropbox.com › Compartilhado, ou peça a quem criou a pasta para remover a sua conta.", "warn"); drawCompanies(); return; }
             if (!(await P.confirm("A pasta é sua", `Você é o dono de “${c.name}”. Para fazê-la sumir, o compartilhamento será encerrado e a pasta apagada para todos que ainda a tenham (o Dropbox guarda arquivos apagados por 30 dias). Apagar?`, "Encerrar e apagar", true))) return;
             const r = await dbx().unshareAndDelete(tk, c.sid, c.name);
             P.ui.toast(r === "apagada" ? "Pasta apagada" : "Compartilhamento encerrado");
@@ -48,7 +55,7 @@ P.definePage("Administração", {
           drawCompanies(); return;
         }
         const r = await A.deleteCompany(c.name);
-        if (r) { P.ui.toast(r === "apagada" ? "Empresa excluída" : "Pasta removida da sua lista"); drawCompanies(); }
+        if (r) { guarda("precifica.admin.ign", c.name.toLowerCase()); P.ui.toast(r === "apagada" ? "Empresa excluída" : "Pasta removida da sua lista"); drawCompanies(); }
       } catch (e) { err(e); }
     };
     const when = (t) => (t ? new Date(t).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—");

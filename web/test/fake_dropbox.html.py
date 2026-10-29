@@ -25,6 +25,7 @@ FAKE = r"""<script>
   if(ep==="sharing/share_folder"){const p=body.path.toLowerCase(); d.folders[p].sid="sf1"; S(d); return J({shared_folder_id:"sf1"});}
   if(ep==="sharing/add_folder_member"){const l=JSON.parse(localStorage.fakeinv||"[]"); l.push(body.members[0].member.email); localStorage.fakeinv=JSON.stringify(l); return J({});}
   if(ep==="sharing/get_folder_metadata"){const k=Object.keys(d.folders).find(x=>d.folders[x].sid===body.shared_folder_id); return J({access_type:{".tag":(k&&d.folders[k].member)?"editor":"owner"}});}
+  if(ep==="sharing/relinquish_folder_membership"&&localStorage.fakefail==="1") return new Response("nope",{status:400});
   if(ep==="sharing/relinquish_folder_membership"&&localStorage.fakeowner==="1") return new Response('{"error":{".tag":"folder_owner"},"error_summary":"folder_owner/"}',{status:409});
   if(ep==="sharing/transfer_folder"){const l=JSON.parse(localStorage.faketransfer||"[]"); l.push(body.to_dropbox_id); localStorage.faketransfer=JSON.stringify(l); return J({});}
   if(ep==="sharing/mount_folder"){const p=JSON.parse(localStorage.fakepend||"[]"); const e=p.find(x=>x.shared_folder_id===body.shared_folder_id); localStorage.fakepend=JSON.stringify(p.filter(x=>x!==e)); localStorage.fakemounted=(localStorage.fakemounted||"")+body.shared_folder_id+","; return J({path_display:"/"+(e?e.name:"x")});}
