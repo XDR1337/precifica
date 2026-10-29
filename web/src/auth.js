@@ -267,6 +267,27 @@ P.auth = {
     location.reload();
   },
   /** A empresa deixou de existir: esquece a pasta e a copia do acesso, para o app nao tentar abri-la de novo. */
+  /** Empresa encerrada pelo administrador: se a pasta for do dono, ele a passa para o administrador antes de sair (assim o administrador pode apaga-la de vez). */
+  async closeAndLeave(msg) {
+    try { if (!this.isAdmin() && this.me && this.me.papel === "dono") await this.tryTransfer(); } catch (e) { /* sai mesmo assim */ }
+    this.forget(msg);
+  },
+  /** Administrador espera o dono da pasta passar a propriedade (o app do dono faz isso ao ver o aviso de encerramento). */
+  waitOwnership(folder, seg = 90) {
+    return new Promise((resolve) => {
+      const d = dbx(); let n = seg, busy = false, iv = null;
+      const txt = h("p", { class: "msg" });
+      const fim = (ok) => { clearInterval(iv); m.close(); resolve(ok); };
+      const m = P.modal({ title: "Passando a pasta para você…", body: [h("div", { class: "auth-busy" }, h("div", { class: "spinner" }), txt), h("p", { class: "fh", text: "O dono da empresa precisa estar com o app aberto: ao ver o aviso de encerramento, o app dele passa a propriedade da pasta para você sozinho." })], footer: [h("span", { class: "grow" }), btn("Cancelar", () => fim(false), "secondary")], dismiss: false });
+      iv = setInterval(async () => {
+        txt.textContent = `Aguardando… ${n}s`;
+        if (n-- <= 0) return fim(false);
+        if (busy || n % 3) return;
+        busy = true;
+        try { const tk = await this.token(); const i = await d.folderInfo(tk, folder); if (i.owner) fim(true); } catch (e) { /* tenta de novo */ } finally { busy = false; }
+      }, 1000);
+    });
+  },
   recentlyClosed(folder) { const c = rd("precifica.closed") || {}; return Date.now() - (c[slugOf(folder)] || 0) < 86400000; },
   forget(msg) {
     const slug = this.slug();
@@ -292,7 +313,7 @@ P.auth = {
     if (!r) return;
     wr(ACCESS + this.slug(), r.data);
     const m = (r.data.members || []).find((x) => x.email === this.me.email);
-    if (r.data.excluida) { this.forget("Esta empresa foi encerrada pelo administrador."); return; }
+    if (r.data.excluida) { await this.closeAndLeave("Esta empresa foi encerrada pelo administrador."); return; }
     await this.loadPolicy();
     if (!(await this.creatorListed(r.data.criador, r.data))) { this.s.kick = "O acesso desta empresa foi encerrado pelo administrador do sistema."; this.leave(true); return; }
     if (r.data.suspensa) { this.s.kick = "Esta empresa foi suspensa. Fale com o administrador do sistema."; this.leave(true); return; }
@@ -386,22 +407,30 @@ P.auth = {
   async deleteCompany(folder) {
     this.useFolder(folder);
     const tk = await this.token(), d = dbx(), info = await d.folderInfo(tk, folder);
-    const msg = info.owner
+    const admToma = !info.owner && this.isAdmin();         // a pasta e' de um cliente: o administrador pede a propriedade antes de apagar
+    const msg = admToma
+      ? "Esta pasta pertence a outra conta do Dropbox. O app avisa todas as pessoas para saírem, pede ao dono para passar a propriedade da pasta para você (o app dele faz isso sozinho), tira todas as pessoas e só então apaga a pasta e TODOS os dados. O Dropbox guarda arquivos apagados por 30 dias."
+      : info.owner
       ? "Primeiro desconecta todas as pessoas da empresa (donos e funcionários que estiverem com ela aberta), depois tira todas da pasta no Dropbox e só então apaga a pasta e TODOS os dados. O Dropbox guarda arquivos apagados por 30 dias."
       : "Esta pasta pertence a outra conta do Dropbox (por exemplo, o administrador do sistema). Isto só tira a empresa da sua lista; o limite de empresas volta a ficar livre e os dados continuam guardados com o proprietário da pasta.";
-    const v = await P.ask(info.owner ? "Excluir empresa" : "Sair da empresa", [{ key: "nome", label: `Digite o nome da pasta para confirmar: ${folder}`, required: true, help: msg }], {}, { ok: info.owner ? "Excluir para sempre" : "Remover da minha lista", danger: true });
+    const v = await P.ask(info.owner || admToma ? "Excluir empresa" : "Sair da empresa", [{ key: "nome", label: `Digite o nome da pasta para confirmar: ${folder}`, required: true, help: msg }], {}, { ok: info.owner || admToma ? "Excluir para sempre" : "Remover da minha lista", danger: true });
     if (!v) return false;
     if (v.nome.trim().toLowerCase() !== folder.toLowerCase()) throw new Error("O nome não confere. Nada foi excluído.");
     const espera = (ms) => new Promise((x) => setTimeout(x, ms));
-    if (info.owner) {
+    let dono = info.owner;
+    if (dono || admToma) {
       // 1) para a sincronizacao desta aba e avisa todo mundo (donos e funcionarios): quem estiver com a empresa aberta e' desconectado
       if (this.active && !this.isAdmin()) P.sync.stop();
       await this.markClosing(folder);
-      await this.waitClients();
+      if (admToma) {
+        dono = await this.waitOwnership(folder);
+        if (!dono) throw new Error("A propriedade da pasta ainda não passou para você: o dono não abriu o app neste tempo. A empresa já está marcada como encerrada; quando ele abrir o app a propriedade passa para você, e então é só excluir de novo.");
+      }
+      await this.waitClients(dono && admToma ? 20 : 35);
     }
     // 2) tira as pessoas da pasta e apaga
     await d.removeFolder(tk, folder);
-    if (info.owner) {                                         // 3) confere se a pasta sumiu de vez (alguem com versao antiga do app pode recria-la)
+    if (dono) {                                         // 3) confere se a pasta sumiu de vez (alguem com versao antiga do app pode recria-la)
       await espera(4000);
       let ainda = await d.rpc("files/get_metadata", tk, { path: "/" + folder });
       if (ainda.res.ok) { await d.removeFolder(tk, folder).catch(() => {}); await espera(4000); ainda = await d.rpc("files/get_metadata", tk, { path: "/" + folder }); }
@@ -409,7 +438,7 @@ P.auth = {
     }
     const slug = slugOf(folder);
     try { localStorage.removeItem(P.storeKey(slug)); localStorage.removeItem(ACCESS + slug); } catch (e) { /* ok */ }
-    return info.owner ? "apagada" : "saiu";
+    return dono ? "apagada" : "saiu";
   },
   /** Marca a empresa como encerrada nos dois arquivos; quem estiver com ela aberta le a marca na proxima sincronizacao e sai. */
   async markClosing(folder) {

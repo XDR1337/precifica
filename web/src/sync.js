@@ -415,7 +415,7 @@ P.sync = {
       let changedLocal = false;
       for (let attempt = 0; ; attempt++) {              // se outra pessoa gravou no meio, le de novo, junta e tenta outra vez
         const remote = await p.read(token);
-        if (remote && remote.encerrada && P.auth && P.auth.active && !P.auth.isAdmin()) { this.running = false; P.auth.forget("Esta empresa foi encerrada pelo administrador."); return; }   // nao grava nada
+        if (remote && remote.encerrada && P.auth && P.auth.active && !P.auth.isAdmin()) { this.running = false; P.auth.closeAndLeave("Esta empresa foi encerrada pelo administrador."); return; }   // nao grava nada
         if (remote && !db.state.replace && db.mergeRemote(remote)) changedLocal = true;
         const mine = db.snapshot();
         if (!remote || db.state.replace || JSON.stringify(mine) !== JSON.stringify(remote)) {
