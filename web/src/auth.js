@@ -80,6 +80,7 @@ P.auth = {
     for (const c of this.companies || []) {
       let acc = null;
       try { acc = await this.readAccess(c.name); } catch (e) { continue; }
+      if ((acc && acc.excluida) || this.recentlyClosed(c.name)) continue;      // empresa sendo excluida: nao aparece para ninguem
       if (!acc || !Array.isArray(acc.members)) { this.unclaimed.push(c.name); continue; }
       this.accs[c.name] = acc;
       const m = em && acc.members.find((x) => x.email === em);
@@ -266,8 +267,10 @@ P.auth = {
     location.reload();
   },
   /** A empresa deixou de existir: esquece a pasta e a copia do acesso, para o app nao tentar abri-la de novo. */
+  recentlyClosed(folder) { const c = rd("precifica.closed") || {}; return Date.now() - (c[slugOf(folder)] || 0) < 86400000; },
   forget(msg) {
     const slug = this.slug();
+    try { const c = rd("precifica.closed") || {}; c[slug] = Date.now(); wr("precifica.closed", c); } catch (e) { /* ok */ }
     try { localStorage.removeItem(ACCESS + slug); } catch (e) { /* ok */ }
     this.s.folder = ""; this.s.kick = msg; this.save();
     P.app.db && (P.app.db.persistent = false);
@@ -289,6 +292,7 @@ P.auth = {
     if (!r) return;
     wr(ACCESS + this.slug(), r.data);
     const m = (r.data.members || []).find((x) => x.email === this.me.email);
+    if (r.data.excluida) { this.forget("Esta empresa foi encerrada pelo administrador."); return; }
     await this.loadPolicy();
     if (!(await this.creatorListed(r.data.criador, r.data))) { this.s.kick = "O acesso desta empresa foi encerrado pelo administrador do sistema."; this.leave(true); return; }
     if (r.data.suspensa) { this.s.kick = "Esta empresa foi suspensa. Fale com o administrador do sistema."; this.leave(true); return; }
@@ -383,15 +387,47 @@ P.auth = {
     this.useFolder(folder);
     const tk = await this.token(), d = dbx(), info = await d.folderInfo(tk, folder);
     const msg = info.owner
-      ? "Primeiro tira todas as pessoas da pasta no Dropbox e depois apaga a pasta e TODOS os dados desta empresa. O Dropbox guarda arquivos apagados por 30 dias."
+      ? "Primeiro desconecta todas as pessoas da empresa (donos e funcionários que estiverem com ela aberta), depois tira todas da pasta no Dropbox e só então apaga a pasta e TODOS os dados. O Dropbox guarda arquivos apagados por 30 dias."
       : "Esta pasta pertence a outra conta do Dropbox (por exemplo, o administrador do sistema). Isto só tira a empresa da sua lista; o limite de empresas volta a ficar livre e os dados continuam guardados com o proprietário da pasta.";
     const v = await P.ask(info.owner ? "Excluir empresa" : "Sair da empresa", [{ key: "nome", label: `Digite o nome da pasta para confirmar: ${folder}`, required: true, help: msg }], {}, { ok: info.owner ? "Excluir para sempre" : "Remover da minha lista", danger: true });
     if (!v) return false;
     if (v.nome.trim().toLowerCase() !== folder.toLowerCase()) throw new Error("O nome não confere. Nada foi excluído.");
+    const espera = (ms) => new Promise((x) => setTimeout(x, ms));
+    if (info.owner) {
+      // 1) para a sincronizacao desta aba e avisa todo mundo (donos e funcionarios): quem estiver com a empresa aberta e' desconectado
+      if (this.active && !this.isAdmin()) P.sync.stop();
+      await this.markClosing(folder);
+      await this.waitClients();
+    }
+    // 2) tira as pessoas da pasta e apaga
     await d.removeFolder(tk, folder);
+    if (info.owner) {                                         // 3) confere se a pasta sumiu de vez (alguem com versao antiga do app pode recria-la)
+      await espera(4000);
+      let ainda = await d.rpc("files/get_metadata", tk, { path: "/" + folder });
+      if (ainda.res.ok) { await d.removeFolder(tk, folder).catch(() => {}); await espera(4000); ainda = await d.rpc("files/get_metadata", tk, { path: "/" + folder }); }
+      if (ainda.res.ok) throw new Error("A pasta voltou a aparecer: alguém ainda está com a empresa aberta numa versão antiga do app e a recriou. Peça para fechar o app (ou desconectar o Dropbox) e exclua de novo.");
+    }
     const slug = slugOf(folder);
     try { localStorage.removeItem(P.storeKey(slug)); localStorage.removeItem(ACCESS + slug); } catch (e) { /* ok */ }
     return info.owner ? "apagada" : "saiu";
+  },
+  /** Marca a empresa como encerrada nos dois arquivos; quem estiver com ela aberta le a marca na proxima sincronizacao e sai. */
+  async markClosing(folder) {
+    await this.editAcc((a) => { a.excluida = true; }, folder);
+    const tk = await this.token(), d = dbx(), p = d.basePath + "/precifica-dados.json";
+    const r = await d.getJson(tk, p);
+    if (r) { try { await d.putJson(tk, p, { ...r.data, encerrada: true }, r.rev); } catch (e) { /* alguem gravou junto: a marca no acesso tambem vale */ } }
+  },
+  /** Espera as pessoas serem desconectadas (a tela de cada uma confere a nuvem a cada ~25 s). */
+  waitClients(seg = 35) {
+    return new Promise((resolve) => {
+      let n = seg, iv = null;
+      const txt = h("p", { class: "msg" }), pular = btn("Pular a espera", () => fim(), "secondary");
+      const m = P.modal({ title: "Desconectando as pessoas…", body: [h("div", { class: "auth-busy" }, h("div", { class: "spinner" }), txt), h("p", { class: "fh", text: "Quem estiver com a empresa aberta recebe o aviso e sai sozinho. Depois a pasta é apagada." })], footer: [h("span", { class: "grow" }), pular], dismiss: false });
+      const fim = () => { clearInterval(iv); m.close(); resolve(); };
+      const tick = () => { txt.textContent = `Aguardando ${n}s para apagar…`; if (n-- <= 0) fim(); };
+      iv = setInterval(tick, 1000); tick();
+    });
   },
   async invite(folder) {
     const v = await P.ask("Reenviar convite do Dropbox", [{ key: "email", label: "E-mail da conta Dropbox da pessoa", required: true, mode: "email" }], {}, { ok: "Enviar convite" });

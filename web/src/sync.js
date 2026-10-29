@@ -350,7 +350,7 @@ P.sync = {
   s: load(), state: "idle", msg: "", token: null, tokenExp: 0, timer: null, running: false, listeners: [], providers: { dropbox, google: googleProvider },
 
   get provider() { return this.providers[this.s.provider || "dropbox"]; },
-  get connected() { return !!this.s.connected && this.provider.configured() && !(P.auth && P.auth.adminHome); },
+  get connected() { return !this.dead && !!this.s.connected && this.provider.configured() && !(P.auth && P.auth.adminHome); },
   save() { store(this.s); },
   on(fn) { this.listeners.push(fn); },
   set(state, msg = "") { this.state = state; this.msg = msg; this.listeners.forEach((f) => f()); },
@@ -385,6 +385,8 @@ P.sync = {
   async handleRedirect() {
     try { return (await dropbox.finish()) ? "ok" : ""; } catch (e) { return e.message || "Não foi possível conectar ao Dropbox."; }
   },
+  /** Para de vez a sincronizacao desta aba (usado antes de excluir a empresa, para nao recriar a pasta). */
+  stop() { this.dead = true; clearTimeout(this.timer); },
   disconnect() {
     const t = this.cachedToken(), p = this.provider;
     if (t) p.revoke(t);
@@ -413,6 +415,7 @@ P.sync = {
       let changedLocal = false;
       for (let attempt = 0; ; attempt++) {              // se outra pessoa gravou no meio, le de novo, junta e tenta outra vez
         const remote = await p.read(token);
+        if (remote && remote.encerrada && P.auth && P.auth.active && !P.auth.isAdmin()) { this.running = false; P.auth.forget("Esta empresa foi encerrada pelo administrador."); return; }   // nao grava nada
         if (remote && !db.state.replace && db.mergeRemote(remote)) changedLocal = true;
         const mine = db.snapshot();
         if (!remote || db.state.replace || JSON.stringify(mine) !== JSON.stringify(remote)) {
