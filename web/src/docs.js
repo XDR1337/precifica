@@ -219,31 +219,33 @@ P.docs.proposal = function (cfg, prop, itens) {
   const sub = (t) => P.sub(t, ctx);
   const numero = ctx.numero;
   const dt = ctx.data.slice(8, 10) + "/" + ctx.data.slice(5, 7) + "/" + ctx.data.slice(2, 4);
-  const titulo = `PROPOSTA TÉCNICA E COMERCIAL: N° ${numero}  - ${ctx.titulo}`.replace(/[ -]+$/, "");
-  const head = `<div class="ph"><img src="${logoSrc(cfg)}" alt=""><b>Data: ${dt}</b></div><div class="ptitle">${desc(titulo)}</div><div class="rule2"></div>`;
   const ac = (prop.aos_cuidados || prop.cliente_nome || "").trim();
+  // cabecalho que se repete em todas as paginas: logotipo + numero e data; a faixa laranja/azul fecha o bloco
+  const head = `<div class="ph"><img src="${logoSrc(cfg)}" alt=""><div class="pk"><b>PROPOSTA Nº ${desc(String(numero))}</b><span>Data: ${dt}</span></div></div><div class="rule2"></div>`;
   const secao = (t, texto, o = {}) => {
     const ps = P.paras(sub(texto));
     const tit = sub(t).trim();
     if (!ps.length) return "";
-    return `${o.nova ? '<div class="pgbreak"></div>' : ""}<h4 class="psec" style="${o.espaco ? `margin-top:${6.7 + o.espaco}pt` : ""}"><u>${desc(tit)}</u></h4>` +
+    return `${o.nova ? '<div class="pgbreak"></div>' : ""}<h4 class="psec"${o.espaco ? ` style="margin-top:${18 + o.espaco}pt"` : ""}>${desc(tit)}</h4>` +
       ps.map((p, i) => `<p class="pb${i === ps.length - 1 ? " last" : ""}">${P.rich(p)}</p>`).join("");
   };
-  let b = `<div style="height:29pt"></div>`;
-  if (ac) b += `<p class="pac"><u>A/C.: ${desc(ac)}</u></p>`;
+  // capa (so na primeira pagina): titulo grande e quadro com os dados da proposta
+  const meta = [["Proposta", "Nº " + numero], ["Data", dt], ["Validade", ctx.validade ? ctx.validade + " dias" : ""], ["A/C", ac]].filter((x) => x[1]);
+  let b = `<div class="pcover"><div class="pkicker">PROPOSTA TÉCNICA E COMERCIAL</div>${ctx.titulo ? `<h1 class="ptitle">${desc(ctx.titulo)}</h1>` : ""}` +
+    `<div class="pmeta">${meta.map(([k, v]) => `<div><span>${k}</span><b>${desc(v)}</b></div>`).join("")}</div></div>`;
   const objeto = P.paras(sub(prop.objeto));
-  if (objeto.length) b += `<h4 class="psec obj"><u>OBJETIVO</u></h4>` + objeto.map((p, i) => `<p class="po${i === objeto.length - 1 ? " last" : ""}">${P.rich(p)}</p>`).join("");
+  if (objeto.length) b += `<h4 class="psec obj">OBJETIVO</h4>` + objeto.map((p, i) => `<p class="po${i === objeto.length - 1 ? " last" : ""}">${P.rich(p)}</p>`).join("");
   // escopo
   const escopo = P.json(prop.escopo_json, []);
   const intro = sub(prop.escopo_intro).trim();
   if (escopo.length || intro) {
-    b += `<h4 class="psec esc"><u>ESCOPO DOS SERVIÇOS</u></h4>`;
+    b += `<h4 class="psec esc">ESCOPO DOS SERVIÇOS</h4>`;
     if (intro) b += `<p class="pe">${P.rich(intro)}</p>`;
     for (const blk of escopo) {
       const tit = (blk.titulo || "").trim(), txt = sub(blk.texto).trim();
       if (!(tit || txt)) continue;
-      if (tit && txt) b += `<p class="pe pet">${desc(sub(tit))}:</p><p class="pe">${P.rich(txt)}</p>`;
-      else b += `<p class="pe">${tit ? desc(sub(tit)) + ":" : ""}${P.rich(txt)}</p>`;
+      if (tit) b += `<p class="pe pet">${desc(sub(tit))}</p>`;
+      if (txt) b += `<p class="pe">${P.rich(txt)}</p>`;
       for (const tp of String(blk.topicos || "").split("\n").map((x) => x.trim()).filter(Boolean))
         b += `<p class="pe pt"><span class="arr"></span><span>${P.rich(sub(tp))}</span></p>`;
     }
@@ -259,36 +261,36 @@ P.docs.proposal = function (cfg, prop, itens) {
   // investimento
   if (itens.length) {
     if (temTextoAntes && Math.floor(dfnum(prop.invest_nova_pagina, 1))) b += '<div class="pgbreak"></div>';
-    const cols = `<colgroup><col style="width:12.8pt"><col style="width:36pt"><col style="width:256.2pt"><col style="width:116.5pt"><col style="width:100pt"></colgroup>`;
-    b += `<h4 class="psec inv"><u>INVESTIMENTO</u></h4><table class="pinv">${cols}<tbody>`;
+    b += `<h4 class="psec inv">INVESTIMENTO</h4><table class="pinv"><thead><tr><th class="n">Item</th><th>Descrição</th><th class="v">Valor</th></tr></thead><tbody>`;
     itens.forEach((it, k) => {
       const q = dfnum(it.quantidade, 1), v = dfnum(it.valor_unit);
       let d = P.rich(sub(it.descricao));
-      if (Math.abs(q - 1) > 1e-9) d += ` (${desc(dnum(q, Math.abs(q - Math.round(q)) < 1e-9 ? 0 : 2) + (it.unidade ? " " + it.unidade : ""))} × ${desc(dmoney(v))})`;
-      b += `<tr><td class="w"></td><td class="n">${k + 1}</td><td class="d">${d}</td><td class="g"></td><td class="v">${desc(dmoney(q * v))}</td></tr>`;
+      if (Math.abs(q - 1) > 1e-9) d += ` <span class="pqt">(${desc(dnum(q, Math.abs(q - Math.round(q)) < 1e-9 ? 0 : 2) + (it.unidade ? " " + it.unidade : ""))} × ${desc(dmoney(v))})</span>`;
+      b += `<tr><td class="n">${k + 1}</td><td class="d">${d}</td><td class="v">${desc(dmoney(q * v))}</td></tr>`;
     });
-    b += `<tr class="end"><td class="w"></td><td class="n"></td><td class="d"></td><td class="g"></td><td class="v"></td></tr></tbody></table>`;
-    b += `<table class="ptot">${cols}<tbody>`;
-    const trow = (l, v) => `<tr><td></td><td></td><td></td><td class="l">${l}</td><td class="v">${desc(v)}</td></tr>`;
-    if (tot.desconto > 0) b += trow("SUBTOTAL", dmoney(tot.subtotal)) + trow("DESCONTO", "− " + dmoney(tot.desconto));
-    b += trow("VALOR TOTAL DO INVESTIMENTO", dmoney(tot.total)) + "</tbody></table>";
+    b += `</tbody></table><div class="ptotbox">`;
+    if (tot.desconto > 0) b += `<div class="trow"><span>SUBTOTAL</span><b>${desc(dmoney(tot.subtotal))}</b></div><div class="trow"><span>DESCONTO</span><b>− ${desc(dmoney(tot.desconto))}</b></div>`;
+    b += `<div class="trow tot"><span>VALOR TOTAL DO INVESTIMENTO</span><b>${desc(dmoney(tot.total))}</b></div></div>`;
   }
   // condicoes de pagamento
   const parcelas = P.json(prop.parcelas_json, []);
-  let linhas = [];
+  const linhas = [];
   for (const p of parcelas) {
     const rot = (p.rotulo || "").trim(), det = (p.detalhe || "").trim();
     if (!(rot || dfnum(p.valor))) continue;
-    linhas.push(`${rot ? rot + ": " : ""}${dmoney(p.valor)}` + (det ? ` (${det}).` : "."));
+    linhas.push({ rot, det, valor: dfnum(p.valor) });
   }
-  if (!linhas.length && (prop.detalhes_pagamento || "").trim()) linhas = prop.detalhes_pagamento.split("\n").map((x) => x.trim()).filter(Boolean);
-  if (linhas.length) b += `<h4 class="psec pay"><u>CONDIÇÕES DE PAGAMENTO</u></h4>` + linhas.map((ln, i) => `<p class="pb${i === linhas.length - 1 ? " last" : ""}">${desc(ln)}</p>`).join("");
+  if (linhas.length) b += `<h4 class="psec pay">CONDIÇÕES DE PAGAMENTO</h4><div class="ppays">` + linhas.map((r) => `<div class="ppay"><div><b>${desc(r.rot)}</b>${r.det ? `<small>${desc(r.det)}</small>` : ""}</div><strong>${desc(dmoney(r.valor))}</strong></div>`).join("") + `</div>`;
+  else if ((prop.detalhes_pagamento || "").trim()) {
+    const txt = prop.detalhes_pagamento.split("\n").map((x) => x.trim()).filter(Boolean);
+    b += `<h4 class="psec pay">CONDIÇÕES DE PAGAMENTO</h4>` + txt.map((ln, i) => `<p class="pb${i === txt.length - 1 ? " last" : ""}">${desc(ln)}</p>`).join("");
+  }
   // secoes depois
   let pos = P.json(prop.secoes_pos_json, []);
   if (!pos.length && (prop.observacoes || "").trim()) pos = [{ titulo: "OBSERVAÇÕES COMERCIAIS IMPORTANTES", texto: prop.observacoes }];
   for (const s of pos) b += secao(s.titulo || "", s.texto || "", { nova: !!s.nova_pagina, espaco: dfnum(s.espaco) });
   b += P.docs.closing(cfg, prop, ctx, ac);
-  const css = `@page{size:A4;margin:9mm 9.05mm 15mm 17mm;@bottom-center{content:counter(page);font:10.7pt Calibri,Carlito,Arial,sans-serif;color:#000}}`;
+  const css = `@page{size:A4;margin:14mm 17mm 18mm 17mm;@bottom-center{content:"Página " counter(page) " de " counter(pages);font:8.5pt Calibri,Carlito,Arial,sans-serif;color:#6B7280}}`;
   return { html: `<div class="paper prop"><table class="sheet"><thead><tr><td>${head}</td></tr></thead><tbody><tr><td>${b}</td></tr></tbody></table></div>`, css,
     title: `Proposta ${numero} - ${ctx.cliente || "cliente"}` };
 };
@@ -300,8 +302,8 @@ P.docs.closing = function (cfg, prop, ctx, ac, onlySig = false) {
   const fecho = P.paras(sub(prop.fecho));
   const a1 = sub(prop.assinatura1 || (ac ? `${ac} (Resp.)` : ""));
   const a2 = sub(prop.assinatura2 || cfg.proposta_assinante_empresa || "");
-  return `<div class="pfim">` + fecho.map((p, i) => `<p class="pf" style="${i === 0 ? "margin-top:30pt" : ""}">${P.rich(p)}</p>`).join("") +
-    `<p class="pap" style="${fecho.length ? "" : "margin-top:30pt"}">Aprovo as condições acima descritas em __________/__________/__________e assinamos:</p>` +
+  return `<div class="pfim">` + fecho.map((p, i) => `<p class="pf">${P.rich(p)}</p>`).join("") +
+    `<p class="pap">Aprovo as condições acima descritas em ____ / ____ / ________ e assinamos:</p>` +
     P.docs.sigRow(prop.assinatura1_img, a1, prop.assinatura2_img, a2, prop.assinatura1_esc, prop.assinatura2_esc) + `</div>`;
 };
 // ------------------------------------------------------------------ visualizacao / impressao

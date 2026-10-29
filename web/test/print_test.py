@@ -1,6 +1,7 @@
 """Teste de impressao: abre os documentos (proposta, relatorio, analise) no Edge/Chrome headless e gera PDFs em test/out/.
 Uso:  python web/test/print_test.py   (depois de python web/test/parity_gen.py)"""
 import json
+import time
 import subprocess
 import sys
 from pathlib import Path
@@ -36,9 +37,13 @@ JOBS = {
 }
 for name, js in JOBS.items():
     page = html.replace("</body>", f"""<script>
+      (async () => {{
+      await new Promise((r) => setTimeout(r, 400));                       // o app abre na tela de login: entra direto, sem Dropbox
+      if (!P.app.db) {{ P.auth.hide(); P.app.start(); }}
       P.welcome = () => {{}}; P.app.tutorial.start = () => {{}};
       P.app.db.importData({json.dumps(db)}); P.app.db.setMany({{onboarding_ok: 1, tutorial_nao_mostrar: 1}}); P.app.changed();
       {js}
+      }})();
     </script></body>""")
     f = OUT / f"print_{name}.html"
     f.write_text(page, encoding="utf-8")
@@ -47,4 +52,8 @@ for name, js in JOBS.items():
         pdf.unlink()
     subprocess.run([exe, "--headless=new", "--disable-gpu", "--no-pdf-header-footer", f"--print-to-pdf={pdf}", "--virtual-time-budget=6000",
                     f"--user-data-dir={OUT / 'profile'}", f.as_uri()], check=False, timeout=120, capture_output=True)
+    for _ in range(40):                                     # o Edge as vezes termina de gravar o PDF depois de sair
+        if pdf.exists() and pdf.stat().st_size > 0:
+            break
+        time.sleep(0.5)
     print(name, "->", pdf if pdf.exists() else "FALHOU")
