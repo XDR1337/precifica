@@ -93,3 +93,47 @@ P.logoColors = (url) => new Promise((resolve) => {
   };
   img.src = url;
 });
+
+// ---------------------------------------------------------------- fonte e tema do app
+const SIS = 'system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
+/** Fontes que o dono pode escolher: [nome, familia CSS, nome no Google Fonts ou null]. As do sistema funcionam sempre; as do Google sao baixadas na primeira vez e depois ficam guardadas para uso offline. */
+P.FONTES = [
+  ["Padrão (do sistema)", SIS, null], ["Calibri", 'Calibri,Carlito,"Segoe UI",Arial,sans-serif', null], ["Arial", "Arial,Helvetica,sans-serif", null], ["Verdana", "Verdana,Geneva,sans-serif", null],
+  ["Georgia (com serifa)", "Georgia,'Times New Roman',serif", null], ["Times New Roman (com serifa)", "'Times New Roman',Times,serif", null],
+  ["Inter", "Inter," + SIS, "Inter"], ["Roboto", "Roboto," + SIS, "Roboto"], ["Open Sans", "'Open Sans'," + SIS, "Open Sans"], ["Lato", "Lato," + SIS, "Lato"],
+  ["Montserrat", "Montserrat," + SIS, "Montserrat"], ["Poppins", "Poppins," + SIS, "Poppins"], ["Nunito", "Nunito," + SIS, "Nunito"], ["Raleway", "Raleway," + SIS, "Raleway"],
+  ["Source Sans 3", "'Source Sans 3'," + SIS, "Source Sans 3"], ["Sora", "Sora," + SIS, "Sora"], ["Manrope", "Manrope," + SIS, "Manrope"], ["DM Sans", "'DM Sans'," + SIS, "DM Sans"],
+  ["Plus Jakarta Sans", "'Plus Jakarta Sans'," + SIS, "Plus Jakarta Sans"], ["Merriweather (com serifa)", "Merriweather,Georgia,serif", "Merriweather"],
+  ["Playfair Display (com serifa)", "'Playfair Display',Georgia,serif", "Playfair Display"], ["Lora (com serifa)", "Lora,Georgia,serif", "Lora"],
+];
+P.fonteDe = (cfg) => P.FONTES.find((f) => f[0] === (cfg || {}).fonte) || null;
+/** Carrega a fonte do Google (uma vez). Sem internet a pagina usa a alternativa da familia. */
+P.carregaFonte = (f) => {
+  if (!f || !f[2]) return;
+  const id = "gf-" + f[2].replace(/\W+/g, "");
+  if (document.getElementById(id)) return;
+  const l = document.createElement("link");
+  l.id = id; l.rel = "stylesheet"; l.crossOrigin = "anonymous";
+  l.href = "https://fonts.googleapis.com/css2?family=" + encodeURIComponent(f[2]).replace(/%20/g, "+") + ":wght@400;500;600;700&display=swap";
+  document.head.append(l);
+};
+const _docVars = P.docVars;
+P.docVars = (pal, cfg) => { const f = P.fonteDe(cfg || (P.app && P.app.engine && P.app.engine.cfg)); P.carregaFonte(f); return _docVars(pal) + (f ? `;--docfont:${f[1]}` : ""); };
+
+/** Tema do app: as cores da empresa viram as cores do menu, botoes e destaques, e a fonte escolhida vale para toda a tela. */
+P.applyTheme = (cfg) => {
+  const sig = [cfg.cor_principal, cfg.cor_destaque, cfg.fonte].join("|");
+  if (P._themeSig === sig) return;
+  P._themeSig = sig;
+  const pal = P.palette(cfg), c1 = hex2rgb(pal.c1), c2 = hex2rgb(pal.c2), st = document.documentElement.style, H = rgb2hex;
+  const vars = { "--navy": pal.c1, "--navy-h": H(mix(c1, BRANCO, 0.14)), "--steel": H(mix(c1, BRANCO, 0.4)), "--side": H(mix(c1, PRETO, 0.5)), "--side-h": H(mix(c1, PRETO, 0.3)),
+    "--head": H(mix(c1, BRANCO, 0.92)), "--bg": pal.c1s, "--orange": pal.c2, "--orange-h": H(mix(c2, PRETO, 0.15)), "--orange-l": H(mix(c2, BRANCO, 0.35)), "--orange-d": pal.c2d,
+    "--soft": pal.c2s, "--soft2": H(mix(c2, BRANCO, 0.94)), "--on-orange": contrastoBranco(c2) >= 3.6 ? "#FFFFFF" : "#111A25" };
+  const padrao = !cfg.cor_principal && !cfg.cor_destaque;
+  for (const [k, v] of Object.entries(vars)) { if (padrao && k !== "--on-orange") st.removeProperty(k); else st.setProperty(k, v); }
+  if (padrao) st.setProperty("--on-orange", "#111A25");
+  const f = P.fonteDe(cfg);
+  P.carregaFonte(f);
+  if (f && cfg.fonte !== P.FONTES[0][0]) st.setProperty("--font", f[1]); else st.removeProperty("--font");
+  const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.setAttribute("content", padrao ? "#111A25" : vars["--side"]);
+};

@@ -153,7 +153,7 @@ self.addEventListener('activate', (e) => {{ e.waitUntil(caches.keys().then((ks) 
 self.addEventListener('fetch', (e) => {{
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
-  const isLib = url.hostname === 'cdnjs.cloudflare.com';          // leitor de planilhas (SheetJS): guardado apos o primeiro uso
+  const isLib = ['cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com'].includes(url.hostname);          // leitor de planilhas (SheetJS): guardado apos o primeiro uso
   e.respondWith(caches.match(e.request, {{ ignoreSearch: !isLib }}).then((hit) => hit || fetch(e.request).then((res) => {{
     if (isLib && res && res.status === 200) {{ const copy = res.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); }}
     return res;

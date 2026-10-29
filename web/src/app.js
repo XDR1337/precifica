@@ -175,6 +175,7 @@ P.app = {
     const c = this.engine.cfg;
     const txt = c.empresa_fantasia || c.empresa_nome || "";
     if (this.companyLbl.textContent !== txt) this.companyLbl.textContent = txt;
+    P.applyTheme(c);
     const logo = P.logoApp(c);       // logotipo escolhido em Configuracoes vale no menu todo
     if (this.sideLogo && this.sideLogo._src !== logo) { this.sideLogo.src = logo; this.sideLogo._src = logo; }
   },

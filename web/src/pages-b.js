@@ -342,7 +342,13 @@ P.definePage("Configurações", {
         const on = a.toUpperCase() === atual.c1 && b2.toUpperCase() === atual.c2;
         return h("button", { type: "button", class: "idv-tile" + (on ? " on" : ""), onClick: () => aplicar(a, b2, "Paleta “" + nome + "” aplicada") }, h("div", { class: "idv-sw" }, h("i", { style: { background: a } }), h("i", { style: { background: b2 } })), h("span", { text: nome }));
       });
-      return card(cardTitle("Identidade visual dos documentos", "As cores da empresa valem em todos os PDFs: proposta, relatórios, tabela de preços e análise."),
+      const fonteSel = h("select", { class: "in" }, P.FONTES.map(([n]) => h("option", { value: n, text: n })));
+      fonteSel.value = (P.fonteDe(cfg) || P.FONTES[0])[0];
+      const amostra = h("p", { class: "idv-sample", text: "Proposta comercial nº 1234 — Instalação de quadro elétrico. R$ 2.350,00" });
+      const pinta = () => { const f = P.fonteDe({ fonte: fonteSel.value }); P.carregaFonte(f); amostra.style.fontFamily = f ? f[1] : ""; };
+      pinta();
+      fonteSel.addEventListener("change", () => { pinta(); pg.db.setCfg("fonte", fonteSel.value); P.app.changed("Fonte aplicada"); });
+      return card(cardTitle("Identidade visual da empresa", "As cores e a fonte mudam o visual do app e de todos os PDFs: proposta, relatórios, tabela de preços e análise."),
         h("div", { class: "idv" },
           h("div", { class: "idv-row" },
             h("div", { class: "idv-col" }, h("span", { text: "Cor principal (títulos e tabelas)" }), h("div", { class: "idv-pick" }, cp1, tx1)),
@@ -351,6 +357,8 @@ P.definePage("Configurações", {
           h("div", { class: "bar" }, btn("Aplicar cores", () => aplicar(c1, c2)),
             custom ? btn("Gerar da logo", async () => { const r = await P.logoColors(cfg.empresa_logo); if (!r) return P.info("Não achei cores", "A imagem não tem cores suficientes para montar uma paleta. Escolha uma paleta pronta abaixo.", "warn"); if (await paletteDialog(cfg, r)) aplicar(r.c1, r.c2, "Paleta gerada a partir da logo"); }, "secondary") : null,
             btn("Cores padrão", () => aplicar(P.COR_PADRAO.c1, P.COR_PADRAO.c2, "Cores padrão restauradas"), "ghost")),
+          h("div", { class: "idv-col", style: { maxWidth: "420px" } }, h("span", { text: "Fonte do app e dos documentos" }), fonteSel, amostra,
+            h("span", { class: "fh", text: "As fontes sem “(do sistema)” são baixadas na primeira vez e depois funcionam offline. Sem internet na primeira vez, o app usa uma fonte parecida." })),
           h("div", {}, h("b", { text: "Paletas prontas" }), h("p", { class: "fh", text: "Toque em uma para aplicar na hora." })),
           h("div", { class: "idv-pal" }, tiles)));
     })();

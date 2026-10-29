@@ -311,7 +311,7 @@ P.docs.closing = function (cfg, prop, ctx, ac, onlySig = false) {
 let docModal = null, docStyle = null;
 P.openDoc = function (d) {
   const view = P.h("div", { class: "docview" });
-  view.style.cssText = P.docVars(P.palette(P.app.engine.cfg));          // paleta da empresa (vale na tela e na impressao)
+  view.style.cssText = P.docVars(P.palette(P.app.engine.cfg), P.app.engine.cfg);          // paleta da empresa (vale na tela e na impressao)
   view.innerHTML = d.html;
   const printBtn = P.btn("Imprimir / Salvar PDF", () => { fit(); setTimeout(() => window.print(), 50); }, "primary");
   const hint = P.h("p", { class: "dochint", text: "Dica: na janela de impressão escolha “Salvar como PDF” (no celular: Imprimir › Salvar como PDF ou Compartilhar)." });
