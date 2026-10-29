@@ -379,6 +379,21 @@ P.auth = {
     if (!r) throw new Error("Esta empresa ainda não tem dados na nuvem.");
     return JSON.stringify({ app: "PrecificaWeb", version: 1, exported_at: new Date().toISOString(), data: r.data });
   },
+  /** Exclui uma empresa (ou, se a pasta for de outra conta, tira da lista). Pede para digitar o nome da pasta. */
+  async deleteCompany(folder) {
+    this.useFolder(folder);
+    const tk = await this.token(), d = dbx(), info = await d.folderInfo(tk, folder);
+    const msg = info.owner
+      ? "Apaga a pasta e TODOS os dados desta empresa do Dropbox, para todas as pessoas. O Dropbox guarda arquivos apagados por 30 dias."
+      : "Esta pasta pertence a outra conta do Dropbox. Isto só tira a pasta da sua lista (você sai da empresa); ela continua existindo para os outros.";
+    const v = await P.ask(info.owner ? "Excluir empresa" : "Sair da empresa", [{ key: "nome", label: `Digite o nome da pasta para confirmar: ${folder}`, required: true, help: msg }], {}, { ok: info.owner ? "Excluir para sempre" : "Remover da minha lista", danger: true });
+    if (!v) return false;
+    if (v.nome.trim().toLowerCase() !== folder.toLowerCase()) throw new Error("O nome não confere. Nada foi excluído.");
+    await d.removeFolder(tk, folder);
+    const slug = slugOf(folder);
+    try { localStorage.removeItem(P.storeKey(slug)); localStorage.removeItem(ACCESS + slug); } catch (e) { /* ok */ }
+    return info.owner ? "apagada" : "saiu";
+  },
   async invite(folder) {
     const v = await P.ask("Reenviar convite do Dropbox", [{ key: "email", label: "E-mail da conta Dropbox da pessoa", required: true, mode: "email" }], {}, { ok: "Enviar convite" });
     if (!v) return false;
@@ -523,6 +538,20 @@ P.auth = {
         else bar.append(h("span", { class: "fh", text: "Você atingiu o limite de empresas. Para criar mais, fale com o administrador." }));
       })();
       out.push(card(h("h3", { text: "Limites do seu acesso" }), txt, bar));
+    }
+    if (this.me.papel === "dono" && !this.isAdmin()) {
+      out.push(card(h("h3", { text: "Excluir esta empresa" }), h("p", { class: "cs", text: "Apaga a empresa e todos os dados dela. Se você tem limite de empresas, o espaço volta a ficar livre para criar outra. Faça um backup antes, se precisar guardar algo." }),
+        h("div", { class: "bar" }, btn("Excluir esta empresa", async () => {
+          try {
+            const folder = this.s.folder, r = await this.deleteCompany(folder);
+            if (!r) return;
+            if (P.app.db) P.app.db.persistent = false;                  // impede que a base apagada seja regravada ao fechar a tela
+            try { localStorage.removeItem(P.storeKey(slugOf(folder))); sessionStorage.removeItem(SES); } catch (e) { /* ok */ }
+            this.s.folder = ""; delete this.s.choose; delete this.s.pending; this.save();
+            P.ui.toast(r === "apagada" ? "Empresa excluída" : "Você saiu da empresa");
+            setTimeout(() => location.reload(), 600);
+          } catch (e) { P.info("Não foi possível excluir", e.message, "danger"); }
+        }, "danger"))));
     }
     out.push(card(h("h3", { text: "Minha conta" }), h("p", { class: "cs", text: `${this.isAdmin() ? "Administrador" : this.me.email} · ${this.roleLabel()} · ${this.s.empresa || ""}` }),
       h("div", { class: "bar" }, this.isAdmin() ? btn("Voltar à Administração", () => this.switchCompany(), "secondary") : null, many ? btn("Trocar de empresa", () => this.switchCompany(), "secondary") : null, btn("Sair", () => this.leave(true), "secondary"))));

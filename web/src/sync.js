@@ -193,6 +193,28 @@ const dropbox = {
     const r = await this.rpc("sharing/add_folder_member", token, { shared_folder_id: id, quiet: false, members: [{ member: { ".tag": "email", email }, access_level: { ".tag": "editor" } }] });
     if (!r.res.ok) throw this.friendly(r.res, r.text);
   },
+  /** Onde esta a pasta e quem e' o dono dela no Dropbox (so o dono apaga para todos; os demais apenas saem). */
+  async folderInfo(token, name) {
+    this.forced = name; this.folderOk = null; this.basePath = null;
+    await this.checkFolder(token);
+    const meta = await this.rpc("files/get_metadata", token, { path: this.basePath });
+    const sid = meta.res.ok && meta.j.sharing_info ? meta.j.sharing_info.shared_folder_id || null : null;
+    let owner = true;
+    if (sid) { const fm = await this.rpc("sharing/get_folder_metadata", token, { shared_folder_id: sid }); owner = fm.res.ok ? !!(fm.j.access_type && fm.j.access_type[".tag"] === "owner") : false; }
+    return { path: this.basePath, sid, owner };
+  },
+  /** Dono: apaga a pasta para todos. Quem nao e' dono: sai da pasta compartilhada (ela some so da lista dele). */
+  async removeFolder(token, name) {
+    const i = await this.folderInfo(token, name);
+    if (i.sid && !i.owner) {
+      const r = await this.rpc("sharing/relinquish_folder_membership", token, { shared_folder_id: i.sid, leave_a_copy: false });
+      if (!r.res.ok) throw this.friendly(r.res, r.text);
+      return "saiu";
+    }
+    const r = await this.rpc("files/delete_v2", token, { path: i.path });
+    if (!r.res.ok) throw this.friendly(r.res, r.text);
+    return "apagada";
+  },
   async deleteFolder(token, name) {
     const r = await this.rpc("files/delete_v2", token, { path: "/" + name });
     if (!r.res.ok) throw this.friendly(r.res, r.text);
@@ -344,6 +366,7 @@ P.sync = {
       else if (interactive) P.ui.toast("Sincronizado com o " + p.name);
     } catch (e) {
       if (e.auth || e.message === "auth") { this.set("auth"); if (interactive) P.ui.toast("Faça login novamente", "warn"); }
+      else if (P.auth && P.auth.active && !P.auth.isAdmin() && this.s.last && /A pasta “.*” não foi encontrada/.test(e.message)) { P.auth.s.kick = "Esta empresa não existe mais (foi excluída)."; P.auth.leave(true); }
       else if (!navigator.onLine || e.message === "offline" || /Failed to fetch|NetworkError|Load failed/i.test(e.message)) this.set("offline");
       else { this.set("error", e.message); if (interactive) throw e; }
     } finally {

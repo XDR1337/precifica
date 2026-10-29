@@ -24,6 +24,8 @@ FAKE = r"""<script>
   if(ep==="files/upload"){const p=api.path.toLowerCase(), f=d.files[p]; if(api.mode[".tag"]==="update"&&(!f||f.rev!==api.mode.update)) return new Response("conflict",{status:409}); if(api.mode[".tag"]==="add"&&f) return new Response("conflict",{status:409}); d.files[p]={c:opt.body,rev:"r"+(++n)}; S(d); return J({});}
   if(ep==="sharing/share_folder"){const p=body.path.toLowerCase(); d.folders[p].sid="sf1"; S(d); return J({shared_folder_id:"sf1"});}
   if(ep==="sharing/add_folder_member"){const l=JSON.parse(localStorage.fakeinv||"[]"); l.push(body.members[0].member.email); localStorage.fakeinv=JSON.stringify(l); return J({});}
+  if(ep==="sharing/get_folder_metadata"){const k=Object.keys(d.folders).find(x=>d.folders[x].sid===body.shared_folder_id); return J({access_type:{".tag":(k&&d.folders[k].member)?"editor":"owner"}});}
+  if(ep==="sharing/relinquish_folder_membership"){const k=Object.keys(d.folders).find(x=>d.folders[x].sid===body.shared_folder_id); if(k) delete d.folders[k]; S(d); return J({});}
   if(ep==="files/delete_v2"){const p=body.path.toLowerCase(); delete d.folders[p]; for(const k of Object.keys(d.files)) if(k.startsWith(p+"/")) delete d.files[k]; S(d); return J({});}
   if(ep==="sharing/create_shared_link_with_settings") return J({url:"https://fake.dropbox/s/"+encodeURIComponent(body.path)});
   if(ep==="sharing/get_shared_link_file"){const path=decodeURIComponent(api.url.split("/s/")[1]).toLowerCase(); const f=d.files[path]; if(!f) return new Response("{}",{status:409}); return new Response(f.c,{status:200});}

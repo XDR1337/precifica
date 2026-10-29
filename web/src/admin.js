@@ -23,14 +23,9 @@ P.definePage("Administração", {
         h("div", { class: "bar" }, btn("Gerenciar", () => gerenciar(c), "primary xs"), btn("Abrir", () => A.enterAsAdmin(c.name), "secondary xs"), btn("Excluir", () => excluir(c), "danger xs")))) : [h("p", { class: "fh", text: "Nenhuma empresa encontrada. Cada empresa precisa compartilhar a pasta “Precifica-…” com a sua conta do Dropbox." })]));
     };
     const excluir = async (c) => {
-      const v = await P.ask("Excluir empresa", [{ key: "nome", label: `Digite o nome da pasta para confirmar: ${c.name}`, required: true, help: "Apaga a pasta e todos os dados desta empresa do Dropbox (o Dropbox guarda arquivos apagados por 30 dias). Se a pasta for de outra conta, o Dropbox pode apenas removê-la da sua lista." }], {}, { ok: "Excluir para sempre", danger: true });
-      if (!v) return;
-      if (v.nome.trim().toLowerCase() !== c.name.toLowerCase()) return P.info("Nome não confere", "A empresa não foi excluída.", "warn");
       try {
-        await dbx().deleteFolder(await A.token(), c.name);
-        const slug = c.name.replace(/^precifica-/i, "").toLowerCase();
-        try { localStorage.removeItem(P.storeKey(slug)); localStorage.removeItem("precifica.acesso.v1." + slug); } catch (e) { /* ok */ }
-        P.ui.toast("Empresa excluída"); drawCompanies();
+        const r = await A.deleteCompany(c.name);
+        if (r) { P.ui.toast(r === "apagada" ? "Empresa excluída" : "Pasta removida da sua lista"); drawCompanies(); }
       } catch (e) { err(e); }
     };
     const when = (t) => (t ? new Date(t).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—");
